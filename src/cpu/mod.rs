@@ -31,11 +31,7 @@ impl Cpu {
     }
     
     fn execute(&mut self, instruction: Instruction, bus: &mut Bus) -> u32 {
-        match instruction {
-            Instruction::NOP => 0,
-            Instruction::LD(to, from) => 0,
-            Instruction::INC(target) => 0,
-            Instruction::DEC(target) => 0,
-        }
+        0
+        // TODO
     }
 }
