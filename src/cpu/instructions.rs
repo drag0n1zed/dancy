@@ -158,14 +158,8 @@ impl Instruction {
                 JumpCondition::Always,
                 Target::SignedImmediate8(next_byte(bus, pc) as i8),
             ),
-            0x28 => Instruction::JR(
-                JumpCondition::Zero,
-                Target::SignedImmediate8(next_byte(bus, pc) as i8),
-            ),
-            0x38 => Instruction::JR(
-                JumpCondition::Carry,
-                Target::SignedImmediate8(next_byte(bus, pc) as i8),
-            ),
+            0x28 => Instruction::JR(JumpCondition::Zero, Target::SignedImmediate8(next_byte(bus, pc) as i8)),
+            0x38 => Instruction::JR(JumpCondition::Carry, Target::SignedImmediate8(next_byte(bus, pc) as i8)),
 
             0x09 => Instruction::ADDHL(Target::BC),
             0x19 => Instruction::ADDHL(Target::DE),
@@ -228,47 +222,26 @@ impl Instruction {
 
             0xC0 => Instruction::RET(JumpCondition::NotZero),
             0xD0 => Instruction::RET(JumpCondition::NoCarry),
-            0xE0 => Instruction::LD(
-                Target::Address(0xFF00 + (next_byte(bus, pc)) as u16),
-                Target::A,
-            ),
-            0xF0 => Instruction::LD(
-                Target::A,
-                Target::Address(0xFF00 + (next_byte(bus, pc)) as u16),
-            ),
+            0xE0 => Instruction::LD(Target::Address(0xFF00 + (next_byte(bus, pc)) as u16), Target::A),
+            0xF0 => Instruction::LD(Target::A, Target::Address(0xFF00 + (next_byte(bus, pc)) as u16)),
 
             0xC1 => Instruction::POP(Target::BC),
             0xD1 => Instruction::POP(Target::DE),
             0xE1 => Instruction::POP(Target::HL),
             0xF1 => Instruction::POP(Target::AF),
 
-            0xC2 => Instruction::JP(
-                JumpCondition::NotZero,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
-            0xD2 => Instruction::JP(
-                JumpCondition::NoCarry,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xC2 => Instruction::JP(JumpCondition::NotZero, Target::Immediate16(next_two_bytes(bus, pc))),
+            0xD2 => Instruction::JP(JumpCondition::NoCarry, Target::Immediate16(next_two_bytes(bus, pc))),
             0xE2 => Instruction::LD(Target::FF00PlusC, Target::A),
             0xF2 => Instruction::LD(Target::A, Target::FF00PlusC),
 
-            0xC3 => Instruction::JP(
-                JumpCondition::Always,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xC3 => Instruction::JP(JumpCondition::Always, Target::Immediate16(next_two_bytes(bus, pc))),
             // 0xD3 => Illegal
             // 0xE3 => Illegal
             0xF3 => Instruction::DI,
 
-            0xC4 => Instruction::CALL(
-                JumpCondition::NotZero,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
-            0xD4 => Instruction::CALL(
-                JumpCondition::NoCarry,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xC4 => Instruction::CALL(JumpCondition::NotZero, Target::Immediate16(next_two_bytes(bus, pc))),
+            0xD4 => Instruction::CALL(JumpCondition::NoCarry, Target::Immediate16(next_two_bytes(bus, pc))),
             // 0xE4 => Illegal
             // 0xF4 => Illegal
             //
@@ -282,54 +255,51 @@ impl Instruction {
             0xE6 => Instruction::AND(Target::Immediate8(next_byte(bus, pc))),
             0xF6 => Instruction::OR(Target::Immediate8(next_byte(bus, pc))),
 
-            0xC7 | 0xD7 | 0xE7 | 0xF7 => {
-                Instruction::RST(Target::Address((opcode & 0b0011_1000) as u16))
-            }
+            0xC7 | 0xD7 | 0xE7 | 0xF7 => Instruction::RST(Target::Address((opcode & 0b0011_1000) as u16)),
 
             0xC8 => Instruction::RET(JumpCondition::Zero),
             0xD8 => Instruction::RET(JumpCondition::Carry),
             0xE8 => Instruction::ADDSP(Target::SignedImmediate8((next_byte(bus, pc)) as i8)),
-            0xF8 => Instruction::LD(
-                Target::HL,
-                Target::SPPlusImmediate8(next_byte(bus, pc) as i8),
-            ),
+            0xF8 => Instruction::LD(Target::HL, Target::SPPlusImmediate8(next_byte(bus, pc) as i8)),
 
             0xC9 => Instruction::RET(JumpCondition::Always),
             0xD9 => Instruction::RETI,
             0xE9 => Instruction::JP(JumpCondition::Always, Target::HL),
             0xF9 => Instruction::LD(Target::SP, Target::HL),
 
-            0xCA => Instruction::JP(
-                JumpCondition::Zero,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
-            0xDA => Instruction::JP(
-                JumpCondition::Carry,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xCA => Instruction::JP(JumpCondition::Zero, Target::Immediate16(next_two_bytes(bus, pc))),
+            0xDA => Instruction::JP(JumpCondition::Carry, Target::Immediate16(next_two_bytes(bus, pc))),
             0xEA => Instruction::LD(Target::Address(next_two_bytes(bus, pc)), Target::A),
             0xFA => Instruction::LD(Target::A, Target::Address(next_two_bytes(bus, pc))),
 
-            0xCB => from_cb_opcode(next_byte(bus, pc)),
+            0xCB => {
+                let cb_opcode = next_byte(bus, pc);
+                let destination = decode_bits_to_register(cb_opcode & 0b0000_0111);
+                let bit = (cb_opcode & 0b0011_1000) >> 3;
+                match cb_opcode {
+                    0x00..=0x07 => Instruction::RLC(destination),
+                    0x08..=0x0F => Instruction::RRC(destination),
+                    0x10..=0x17 => Instruction::RL(destination),
+                    0x18..=0x1F => Instruction::RR(destination),
+                    0x20..=0x27 => Instruction::SLA(destination),
+                    0x28..=0x2F => Instruction::SRA(destination),
+                    0x30..=0x37 => Instruction::SWAP(destination),
+                    0x38..=0x3F => Instruction::SRL(destination),
+                    0x40..=0x7F => Instruction::BIT(bit, destination),
+                    0x80..=0xBF => Instruction::RES(bit, destination),
+                    0xC0..=0xFF => Instruction::SET(bit, destination),
+                }
+            }
             // 0xDB => Illegal
             // 0xEB => Illegal
             0xFB => Instruction::EI,
 
-            0xCC => Instruction::CALL(
-                JumpCondition::Zero,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
-            0xDC => Instruction::CALL(
-                JumpCondition::Carry,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xCC => Instruction::CALL(JumpCondition::Zero, Target::Immediate16(next_two_bytes(bus, pc))),
+            0xDC => Instruction::CALL(JumpCondition::Carry, Target::Immediate16(next_two_bytes(bus, pc))),
             // 0xEC => Illegal
             // 0xFC => Illegal
             //
-            0xCD => Instruction::CALL(
-                JumpCondition::Always,
-                Target::Immediate16(next_two_bytes(bus, pc)),
-            ),
+            0xCD => Instruction::CALL(JumpCondition::Always, Target::Immediate16(next_two_bytes(bus, pc))),
             // 0xDD => Illegal
             // 0xED => Illegal
             // 0xFD => Illegal
@@ -339,36 +309,12 @@ impl Instruction {
             0xEE => Instruction::XOR(Target::Immediate8(next_byte(bus, pc))),
             0xFE => Instruction::CP(Target::Immediate8(next_byte(bus, pc))),
 
-            0xCF | 0xDF | 0xEF | 0xFF => {
-                Instruction::RST(Target::Address((opcode & 0b0011_1000) as u16))
-            }
+            0xCF | 0xDF | 0xEF | 0xFF => Instruction::RST(Target::Address((opcode & 0b0011_1000) as u16)),
 
             0xD3 | 0xE3 | 0xE4 | 0xF4 | 0xDB | 0xEB | 0xEC | 0xFC | 0xDD | 0xED | 0xFD => {
-                panic!(
-                    "Illegal opcode encountered: {:#04X} at PC: {:#06X}",
-                    opcode,
-                    *pc - 1
-                );
+                panic!("Illegal opcode encountered: {:#04X} at PC: {:#06X}", opcode, *pc - 1);
             }
         }
-    }
-}
-
-fn from_cb_opcode(cb_opcode: u8) -> Instruction {
-    let destination = decode_bits_to_register(cb_opcode & 0b0000_0111);
-    let bit = (cb_opcode & 0b0011_1000) >> 3;
-    match cb_opcode {
-        0x00..=0x07 => Instruction::RLC(destination),
-        0x08..=0x0F => Instruction::RRC(destination),
-        0x10..=0x17 => Instruction::RL(destination),
-        0x18..=0x1F => Instruction::RR(destination),
-        0x20..=0x27 => Instruction::SLA(destination),
-        0x28..=0x2F => Instruction::SRA(destination),
-        0x30..=0x37 => Instruction::SWAP(destination),
-        0x38..=0x3F => Instruction::SRL(destination),
-        0x40..=0x7F => Instruction::BIT(bit, destination),
-        0x80..=0xBF => Instruction::RES(bit, destination),
-        0xC0..=0xFF => Instruction::SET(bit, destination),
     }
 }
 

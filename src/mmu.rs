@@ -43,25 +43,24 @@ impl Bus {
             0xFE00..=0xFE9F => self.ppu.read_oam(addr),
             // Unusable memory
             0xFEA0..=0xFEFF => 0xFF,
+
             // IO Registers
-            0xFF00..=0xFF7F => {
-                match addr {
-                    // Joypad Input
-                    0xFF00 => self.joypad.read(),
-                    // Timer Registers
-                    0xFF04..=0xFF07 => self.timer.read(addr),
-                    // Interrupt Flag Register
-                    0xFF0F => self.interrupt_flag,
-                    // PPU Registers
-                    0xFF40..=0xFF4B => self.ppu.read_register(addr),
-                    // TODO: APU Registers
-                    _ => 0xFF,
-                }
-            }
+            // Joypad Input
+            0xFF00 => self.joypad.read(),
+            // Timer Registers
+            0xFF04..=0xFF07 => self.timer.read(addr),
+            // Interrupt Flag Register
+            0xFF0F => self.interrupt_flag,
+            // PPU Registers
+            0xFF40..=0xFF4B => self.ppu.read_register(addr),
+            // TODO: CGB KEY1 0xFF4D - speed switch
+            // TODO: APU Registers
+
             // High RAM
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
             // Interrupt Enable Register
             0xFFFF => self.interrupt_enable,
+            _ => unimplemented!("Unimplemented address {:04X}", addr),
         }
     }
 
@@ -81,25 +80,22 @@ impl Bus {
             0xFE00..=0xFE9F => self.ppu.write_oam(addr, value),
             // Unusable memory
             0xFEA0..=0xFEFF => {}
+
             // IO Registers
-            0xFF00..=0xFF7F => {
-                match addr {
-                    // Joypad Input
-                    0xFF00 => self.joypad.write(value),
-                    // Timer Registers
-                    0xFF04..=0xFF07 => self.timer.write(addr, value),
-                    // Interrupt Flag Register
-                    0xFF0F => self.interrupt_flag = value,
-                    // LCD Control
-                    0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
-                    // TODO: APU Registers
-                    _ => {}
-                }
-            }
+            // Joypad Input
+            0xFF00 => self.joypad.write(value),
+            // Timer Registers
+            0xFF04..=0xFF07 => self.timer.write(addr, value),
+            // Interrupt Flag Register
+            0xFF0F => self.interrupt_flag = value,
+            // LCD Control
+            0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
+
             // High RAM
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = value,
             // Interrupt Enable Register
             0xFFFF => self.interrupt_enable = value,
+            _ => unimplemented!("Unimplemented address {:04X}", addr),
         }
     }
 }
