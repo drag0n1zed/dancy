@@ -33,7 +33,8 @@ impl Cpu {
 
         let opcode = bus.read(self.pc);
 
-        let instruction = Instruction::from_opcode(opcode, bus, &mut self.pc);
+        let (instruction, op_bytes) = Instruction::from_opcode(opcode, bus, self.pc);
+        self.pc = self.pc.wrapping_add(op_bytes);
 
         self.execute(instruction, bus)
         // RETURN T-CYCLES!
@@ -46,6 +47,7 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(1);
                 4
             },
+            
             _ => todo!(),
         }
     }
