@@ -29,14 +29,18 @@ impl Bus {
     }
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            // Cartridge ROM
-            0x0000..=0x7FFF => self.cartridge.read(addr),
-            // Video RAM
+            // ROM bank 00
+            0x0000..=0x3FFF => self.cartridge.read(addr),
+            // ROM Bank 01–NN (switchable via MBCs)
+            0x4000..=0x7FFF => self.cartridge.read(addr),
+            // Video RAM (In CGB mode, switchable bank 0/1)
             0x8000..=0x9FFF => self.ppu.read_vram(addr),
-            // Cartridge Save Files
+            // External RAM (on cartridge, for save files)
             0xA000..=0xBFFF => self.cartridge.read(addr),
             // Work RAM
-            0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
+            0xC000..=0xCFFF => self.wram[(addr - 0xC000) as usize],
+            // Work RAM (In CGB mode, switchable bank 1–7)
+            0xD000..=0xDFFF => self.wram[(addr - 0xD000) as usize],
             // Echo RAM
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize],
             // Object Attribute Memory
