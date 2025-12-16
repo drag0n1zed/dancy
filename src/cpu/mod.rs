@@ -1,7 +1,7 @@
 mod instructions;
 mod registers;
 
-use crate::cpu::instructions::Instruction;
+use crate::cpu::instructions::{Instruction};
 use crate::cpu::registers::Registers;
 use crate::mmu::Bus;
 pub struct Cpu {
@@ -26,7 +26,6 @@ impl Cpu {
     }
 
     pub fn step(&mut self, bus: &mut Bus) -> u32 {
-
         if self.halted {
             return 4;
         }
@@ -42,27 +41,9 @@ impl Cpu {
 
     fn execute(&mut self, instruction: Instruction, bus: &mut Bus) -> u32 {
         match instruction {
-            
-            Instruction::NOP => {
-                self.pc = self.pc.wrapping_add(1);
-                4
-            },
-            
-            _ => todo!(),
+            // control/misc
+            Instruction::NOP => 4,
+            _ => unimplemented!(),
         }
-    }
-
-    fn check_and_service_interrupt(&mut self, bus: &mut Bus) -> bool {
-        let ie_reg = bus.read(0xFFFF); // (Is this) Interrupt Enable(d?) Flag
-        let if_reg = bus.read(0xFF0F); // (Did this) Interrupt (trigger?) Flag
-
-        // Pending if same bit is set for both registers
-        let pending = ie_reg & if_reg;
-
-        // No interrupts
-        if pending == 0 {
-            return false;
-        }
-        todo!()
     }
 }
