@@ -1,6 +1,7 @@
 use crate::mmu::Bus;
 
 // 8-bit value source
+
 pub enum ByteSource {
     A,
     B,
@@ -427,12 +428,7 @@ fn get_byte_adv(bus: &Bus, pc: u16, op_bytes: &mut u16) -> u8 {
 
 fn get_word_adv(bus: &Bus, pc: u16, op_bytes: &mut u16) -> u16 {
     *op_bytes += 2;
-    let low = bus.read(pc.wrapping_add(1));
-
-    let high = bus.read(pc.wrapping_add(2));
-
-    // Little endian -> low first then high. when combined its high then low.
-    u16::from_le_bytes([low, high])
+    bus.read_u16(pc.wrapping_add(1))
 }
 
 fn decode_bits_to_location(bits: u8) -> ByteLocation {

@@ -68,6 +68,12 @@ impl Bus {
         }
     }
 
+    pub fn read_u16(&self, addr: u16) -> u16 {
+        let lsb = self.read(addr);
+        let msb = self.read(addr.wrapping_add(1));
+        u16::from_le_bytes([lsb, msb])
+    }
+
     pub fn write(&mut self, addr: u16, value: u8) {
         match addr {
             // Cartridge ROM
@@ -101,5 +107,10 @@ impl Bus {
             0xFFFF => self.interrupt_enable = value,
             _ => unimplemented!("Unimplemented address {:04X}", addr),
         }
+    }
+    pub fn write_u16(&mut self, addr: u16, value: u16) {
+        let [lsb, msb] = value.to_le_bytes();
+        self.write(addr, lsb);
+        self.write(addr.wrapping_add(1), msb);
     }
 }
