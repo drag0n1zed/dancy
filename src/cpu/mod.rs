@@ -31,18 +31,36 @@ impl Cpu {
         }
 
         let opcode = bus.read(self.pc);
-
-        let (instruction, op_bytes) = Instruction::from_opcode(opcode, bus, self.pc);
+        let (instruction, op_bytes, (base_cycles, cond_met_cycles)) = Instruction::from_opcode(opcode, bus, self.pc);
         self.pc = self.pc.wrapping_add(op_bytes);
 
-        self.execute(instruction, bus)
+        let cond = self.execute(instruction, bus);
         // RETURN T-CYCLES!
+        if cond { cond_met_cycles } else { base_cycles }
     }
 
-    fn execute(&mut self, instruction: Instruction, bus: &mut Bus) -> u32 {
+    fn execute(&mut self, instruction: Instruction, bus: &mut Bus) -> bool {
+        // Did condition get matched?
         match instruction {
             // control/misc
-            Instruction::NOP => 4,
+            Instruction::NOP => false,
+
+            // control/br
+
+            // lsm
+            Instruction::LD8(dest, source) => {
+                let value = self.resolve_byte_target(bus, source);
+                self.write_byte_target(bus, dest, value);
+                false
+            }
+            Instruction::LD16(dest, source) => {
+                let value = self.resolve_word_target(source);
+                self.write_word_target(bus, dest, value);
+                false
+            }
+            // alu
+
+            // rsb
             _ => unimplemented!(),
         }
     }
@@ -120,8 +138,7 @@ impl Cpu {
 
             WordSource::Immediate(word) => word,
 
-            // convert negative i8 to large u16. wrap sub value = wrap add (max - value)
-            WordSource::SPPlusImmediate(byte) => self.sp.wrapping_add(byte as u16),
+            WordSource::SPPlusImmediate(byte) => self.sp.wrapping_add_signed(byte as i16),
         }
     }
 
