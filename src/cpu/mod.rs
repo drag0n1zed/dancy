@@ -17,9 +17,9 @@ impl Cpu {
     pub fn new() -> Self {
         Cpu {
             registers: Registers::new(),
-            pc: 0x0000,
-            sp: 0x0000,
-            ime: true,
+            pc: 0x0100,
+            sp: 0xFFFE,
+            ime: false,
             ime_scheduled: false,
             halted: false,
         }
@@ -49,13 +49,25 @@ impl Cpu {
 
             // lsm
             Instruction::LD8(dest, source) => {
-                let value = self.resolve_byte_target(bus, source);
-                self.write_byte_target(bus, dest, value);
+                let value = self.resolve_byte_source(bus, source);
+                self.write_byte_dest(bus, dest, value);
                 false
             }
             Instruction::LD16(dest, source) => {
-                let value = self.resolve_word_target(source);
-                self.write_word_target(bus, dest, value);
+                let value = self.resolve_word_source(source);
+                self.write_word_dest(bus, dest, value);
+                false
+            }
+            Instruction::PUSH(source) => {
+                let value = self.resolve_word_source(source); // Value in register
+                self.sp = self.sp.wrapping_sub(2); // Simulate SP decrement
+                bus.write_u16(self.sp, value); // Write value in register into stack
+                false
+            }
+            Instruction::POP(dest) => {
+                let value = bus.read_u16(self.sp);
+                self.sp = self.sp.wrapping_add(2);
+                self.write_word_dest(bus, dest, value);
                 false
             }
             // alu
@@ -66,7 +78,7 @@ impl Cpu {
     }
 
     // Could modify registers.
-    fn resolve_byte_target(&mut self, bus: &Bus, source: ByteSource) -> u8 {
+    fn resolve_byte_source(&mut self, bus: &Bus, source: ByteSource) -> u8 {
         match source {
             ByteSource::A => self.registers.a,
             ByteSource::B => self.registers.b,
@@ -97,7 +109,7 @@ impl Cpu {
         }
     }
 
-    fn write_byte_target(&mut self, bus: &mut Bus, dest: ByteDest, value: u8) {
+    fn write_byte_dest(&mut self, bus: &mut Bus, dest: ByteDest, value: u8) {
         match dest {
             ByteDest::A => self.registers.a = value,
             ByteDest::B => self.registers.b = value,
@@ -127,7 +139,7 @@ impl Cpu {
         }
     }
 
-    fn resolve_word_target(&mut self, source: WordSource) -> u16 {
+    fn resolve_word_source(&mut self, source: WordSource) -> u16 {
         match source {
             WordSource::AF => self.registers.get_af(),
             WordSource::BC => self.registers.get_bc(),
@@ -142,7 +154,7 @@ impl Cpu {
         }
     }
 
-    fn write_word_target(&mut self, bus: &mut Bus, dest: WordDest, value: u16) {
+    fn write_word_dest(&mut self, bus: &mut Bus, dest: WordDest, value: u16) {
         match dest {
             WordDest::AF => self.registers.set_af(value),
             WordDest::BC => self.registers.set_bc(value),

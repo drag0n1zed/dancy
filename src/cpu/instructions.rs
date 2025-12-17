@@ -130,8 +130,8 @@ pub enum Instruction {
     // lsm
     LD8(ByteDest, ByteSource),
     LD16(WordDest, WordSource),
-    POP(WordDest),
     PUSH(WordSource),
+    POP(WordDest),
 
     // alu
     INC8(ByteDest),
