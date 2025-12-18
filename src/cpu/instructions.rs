@@ -159,6 +159,7 @@ pub enum Instruction {
     // lsm
     LD8(ByteDest, ByteSource),
     LD16(WordDest, WordSource),
+    LDHL(i8),
     PUSH(WordSource),
     POP(WordDest),
 
@@ -461,13 +462,7 @@ impl Instruction {
             0xC8 => (Instruction::RET(JumpCondition::Zero), (8, 20)),
             0xD8 => (Instruction::RET(JumpCondition::Carry), (8, 20)),
             0xE8 => (Instruction::ADDSP((get_byte(bus, pc, &mut op_bytes)) as i8), (16, 16)),
-            0xF8 => (
-                Instruction::LD16(
-                    WordDest::HL,
-                    WordSource::SPPlusImmediate(get_byte(bus, pc, &mut op_bytes) as i8),
-                ),
-                (12, 12),
-            ),
+            0xF8 => (Instruction::LDHL(get_byte(bus, pc, &mut op_bytes) as i8), (12, 12)),
 
             0xC9 => (Instruction::RET(JumpCondition::Always), (16, 16)),
             0xD9 => (Instruction::RETI, (16, 16)),

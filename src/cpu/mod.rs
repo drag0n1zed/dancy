@@ -58,6 +58,17 @@ impl Cpu {
                 self.write_word_dest(bus, dest, value);
                 false
             }
+            Instruction::LDHL(val) => {
+                let val_unsigned = val as u8;
+                self.registers.f.zero = false;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
+                self.registers.f.carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
+
+                let sp_plus_val = self.sp.wrapping_add_signed(val as i16);
+                self.write_word_dest(bus, WordDest::HL, sp_plus_val);
+                false
+            }
             Instruction::PUSH(source) => {
                 let value = self.resolve_word_source(source); // Value in register
                 self.sp = self.sp.wrapping_sub(2); // Simulate SP decrement
