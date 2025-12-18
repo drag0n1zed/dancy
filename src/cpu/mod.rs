@@ -71,6 +71,26 @@ impl Cpu {
                 false
             }
             // alu
+            Instruction::INC8(loc) => {
+                let value = self.resolve_byte_source(bus, loc.into());
+                self.write_byte_dest(bus, loc.into(), value.wrapping_add(1));
+                false
+            }
+            Instruction::DEC8(loc) => {
+                let value = self.resolve_byte_source(bus, loc.into());
+                self.write_byte_dest(bus, loc.into(), value.wrapping_sub(1));
+                false
+            }
+            Instruction::INC16(loc) => {
+                let value = self.resolve_word_source(loc.into());
+                self.write_word_dest(bus, loc.into(), value.wrapping_add(1));
+                false
+            }
+            Instruction::DEC16(loc) => {
+                let value = self.resolve_word_source(loc.into());
+                self.write_word_dest(bus, loc.into(), value.wrapping_sub(1));
+                false
+            }
 
             // rsb
             _ => unimplemented!(),

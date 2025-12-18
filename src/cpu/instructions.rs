@@ -102,6 +102,35 @@ impl From<ByteLocation> for ByteDest {
         }
     }
 }
+#[derive(Clone, Copy)]
+pub enum WordLocation {
+    BC,
+    DE,
+    HL,
+    SP,
+}
+
+impl From<WordLocation> for WordSource {
+    fn from(loc: WordLocation) -> Self {
+        match loc {
+            WordLocation::BC => WordSource::BC,
+            WordLocation::DE => WordSource::DE,
+            WordLocation::HL => WordSource::HL,
+            WordLocation::SP => WordSource::SP,
+        }
+    }
+}
+
+impl From<WordLocation> for WordDest {
+    fn from(loc: WordLocation) -> Self {
+        match loc {
+            WordLocation::BC => WordDest::BC,
+            WordLocation::DE => WordDest::DE,
+            WordLocation::HL => WordDest::HL,
+            WordLocation::SP => WordDest::SP,
+        }
+    }
+}
 
 pub enum JumpCondition {
     NotZero,
@@ -134,10 +163,10 @@ pub enum Instruction {
     POP(WordDest),
 
     // alu
-    INC8(ByteDest),
-    DEC8(ByteDest),
-    INC16(WordDest),
-    DEC16(WordDest),
+    INC8(ByteLocation),
+    DEC8(ByteLocation),
+    INC16(WordLocation),
+    DEC16(WordLocation),
     ADDHL(WordSource),
     ADDSP(i8),
     // Register A as destination ->
@@ -213,20 +242,20 @@ impl Instruction {
             0x22 => (Instruction::LD8(ByteDest::IndHLI, ByteSource::A), (8, 8)),
             0x32 => (Instruction::LD8(ByteDest::IndHLD, ByteSource::A), (8, 8)),
 
-            0x03 => (Instruction::INC16(WordDest::BC), (8, 8)),
-            0x13 => (Instruction::INC16(WordDest::DE), (8, 8)),
-            0x23 => (Instruction::INC16(WordDest::HL), (8, 8)),
-            0x33 => (Instruction::INC16(WordDest::SP), (8, 8)),
+            0x03 => (Instruction::INC16(WordLocation::BC), (8, 8)),
+            0x13 => (Instruction::INC16(WordLocation::DE), (8, 8)),
+            0x23 => (Instruction::INC16(WordLocation::HL), (8, 8)),
+            0x33 => (Instruction::INC16(WordLocation::SP), (8, 8)),
 
-            0x04 => (Instruction::INC8(ByteDest::B), (4, 4)),
-            0x14 => (Instruction::INC8(ByteDest::D), (4, 4)),
-            0x24 => (Instruction::INC8(ByteDest::H), (4, 4)),
-            0x34 => (Instruction::INC8(ByteDest::IndHL), (12, 12)),
+            0x04 => (Instruction::INC8(ByteLocation::B), (4, 4)),
+            0x14 => (Instruction::INC8(ByteLocation::D), (4, 4)),
+            0x24 => (Instruction::INC8(ByteLocation::H), (4, 4)),
+            0x34 => (Instruction::INC8(ByteLocation::IndHL), (12, 12)),
 
-            0x05 => (Instruction::DEC8(ByteDest::B), (4, 4)),
-            0x15 => (Instruction::DEC8(ByteDest::D), (4, 4)),
-            0x25 => (Instruction::DEC8(ByteDest::H), (4, 4)),
-            0x35 => (Instruction::DEC8(ByteDest::IndHL), (12, 12)),
+            0x05 => (Instruction::DEC8(ByteLocation::B), (4, 4)),
+            0x15 => (Instruction::DEC8(ByteLocation::D), (4, 4)),
+            0x25 => (Instruction::DEC8(ByteLocation::H), (4, 4)),
+            0x35 => (Instruction::DEC8(ByteLocation::IndHL), (12, 12)),
 
             0x06 => (
                 Instruction::LD8(ByteDest::B, ByteSource::Immediate(get_byte(bus, pc, &mut op_bytes))),
@@ -277,20 +306,20 @@ impl Instruction {
             0x2A => (Instruction::LD8(ByteDest::A, ByteSource::IndHLI), (8, 8)),
             0x3A => (Instruction::LD8(ByteDest::A, ByteSource::IndHLD), (8, 8)),
 
-            0x0B => (Instruction::DEC16(WordDest::BC), (8, 8)),
-            0x1B => (Instruction::DEC16(WordDest::DE), (8, 8)),
-            0x2B => (Instruction::DEC16(WordDest::HL), (8, 8)),
-            0x3B => (Instruction::DEC16(WordDest::SP), (8, 8)),
+            0x0B => (Instruction::DEC16(WordLocation::BC), (8, 8)),
+            0x1B => (Instruction::DEC16(WordLocation::DE), (8, 8)),
+            0x2B => (Instruction::DEC16(WordLocation::HL), (8, 8)),
+            0x3B => (Instruction::DEC16(WordLocation::SP), (8, 8)),
 
-            0x0C => (Instruction::INC8(ByteDest::C), (4, 4)),
-            0x1C => (Instruction::INC8(ByteDest::E), (4, 4)),
-            0x2C => (Instruction::INC8(ByteDest::L), (4, 4)),
-            0x3C => (Instruction::INC8(ByteDest::A), (4, 4)),
+            0x0C => (Instruction::INC8(ByteLocation::C), (4, 4)),
+            0x1C => (Instruction::INC8(ByteLocation::E), (4, 4)),
+            0x2C => (Instruction::INC8(ByteLocation::L), (4, 4)),
+            0x3C => (Instruction::INC8(ByteLocation::A), (4, 4)),
 
-            0x0D => (Instruction::DEC8(ByteDest::C), (4, 4)),
-            0x1D => (Instruction::DEC8(ByteDest::E), (4, 4)),
-            0x2D => (Instruction::DEC8(ByteDest::L), (4, 4)),
-            0x3D => (Instruction::DEC8(ByteDest::A), (4, 4)),
+            0x0D => (Instruction::DEC8(ByteLocation::C), (4, 4)),
+            0x1D => (Instruction::DEC8(ByteLocation::E), (4, 4)),
+            0x2D => (Instruction::DEC8(ByteLocation::L), (4, 4)),
+            0x3D => (Instruction::DEC8(ByteLocation::A), (4, 4)),
 
             0x0E => (
                 Instruction::LD8(ByteDest::C, ByteSource::Immediate(get_byte(bus, pc, &mut op_bytes))),
