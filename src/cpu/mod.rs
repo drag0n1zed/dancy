@@ -72,23 +72,66 @@ impl Cpu {
             }
             // alu
             Instruction::INC8(loc) => {
-                let value = self.resolve_byte_source(bus, loc.into());
-                self.write_byte_dest(bus, loc.into(), value.wrapping_add(1));
+                let val = self.resolve_byte_source(bus, loc.into());
+                let new_val = val.wrapping_add(1);
+                self.registers.f.zero = new_val == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (val & 0x0F) == 0x0F; // Overflow if 0bxxxx1111
+                self.write_byte_dest(bus, loc.into(), new_val);
                 false
             }
             Instruction::DEC8(loc) => {
-                let value = self.resolve_byte_source(bus, loc.into());
-                self.write_byte_dest(bus, loc.into(), value.wrapping_sub(1));
+                let val = self.resolve_byte_source(bus, loc.into());
+                let new_val = val.wrapping_sub(1);
+                self.registers.f.zero = new_val == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (val & 0x0F) == 0x00; // Overflow if 0bxxxx0000
+                self.write_byte_dest(bus, loc.into(), new_val);
                 false
             }
             Instruction::INC16(loc) => {
                 let value = self.resolve_word_source(loc.into());
                 self.write_word_dest(bus, loc.into(), value.wrapping_add(1));
+                // Doesn't affect flags
                 false
             }
             Instruction::DEC16(loc) => {
                 let value = self.resolve_word_source(loc.into());
                 self.write_word_dest(bus, loc.into(), value.wrapping_sub(1));
+                // Doesn't affect flags
+                false
+            }
+            Instruction::ADDHL(source) => {
+                let value = self.resolve_word_source(source);
+                let hl = self.registers.get_hl();
+                let (new_hl, carry) = hl.overflowing_add(value);
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (value & 0x0FFF) + (hl & 0x0FFF) > 0x0FFF;
+                self.registers.f.carry = carry;
+
+                self.registers.set_hl(new_hl);
+                false
+            }
+            Instruction::ADDSP(val) => {
+                let val_unsigned = val as u8;
+                self.registers.f.zero = false;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
+                self.registers.f.carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
+
+                self.sp = self.sp.wrapping_add_signed(val as i16);
+                false
+            }
+            Instruction::ADD(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let (new_a, carry) = a.overflowing_add(value);
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (value & 0x0F) + (a & 0x0F) > 0x0F;
+                self.registers.f.carry = carry;
+
+                self.registers.a = new_a;
                 false
             }
 
