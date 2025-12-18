@@ -47,7 +47,6 @@ pub enum WordSource {
     HL,
     SP,
     Immediate(u16),
-    SPPlusImmediate(i8),
 }
 
 // 16-bit value destination
@@ -378,7 +377,7 @@ impl Instruction {
             0xD0 => (Instruction::RET(JumpCondition::NoCarry), (8, 20)),
             0xE0 => (
                 Instruction::LD8(
-                    ByteDest::Address(0xFF00 + (get_byte(bus, pc, &mut op_bytes)) as u16),
+                    ByteDest::Address(0xFF00 + get_byte(bus, pc, &mut op_bytes) as u16),
                     ByteSource::A,
                 ),
                 (12, 12),
@@ -386,7 +385,7 @@ impl Instruction {
             0xF0 => (
                 Instruction::LD8(
                     ByteDest::A,
-                    ByteSource::Address(0xFF00 + (get_byte(bus, pc, &mut op_bytes)) as u16),
+                    ByteSource::Address(0xFF00 + get_byte(bus, pc, &mut op_bytes) as u16),
                 ),
                 (12, 12),
             ),
@@ -461,7 +460,7 @@ impl Instruction {
 
             0xC8 => (Instruction::RET(JumpCondition::Zero), (8, 20)),
             0xD8 => (Instruction::RET(JumpCondition::Carry), (8, 20)),
-            0xE8 => (Instruction::ADDSP((get_byte(bus, pc, &mut op_bytes)) as i8), (16, 16)),
+            0xE8 => (Instruction::ADDSP(get_byte(bus, pc, &mut op_bytes) as i8), (16, 16)),
             0xF8 => (Instruction::LDHL(get_byte(bus, pc, &mut op_bytes) as i8), (12, 12)),
 
             0xC9 => (Instruction::RET(JumpCondition::Always), (16, 16)),
