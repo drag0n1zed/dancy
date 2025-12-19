@@ -145,6 +145,17 @@ impl Cpu {
                 self.registers.a = new_a;
                 false
             }
+            Instruction::ADC(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let c_flag = if self.registers.f.carry { 1 } else { 0 };
+                let (new_a, carry) = a.overflowing_add(value + c_flag);
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = ((value + c_flag) & 0x0F) + (a & 0x0F) > 0x0F;
+                self.registers.f.carry = carry;
+                false
+            }
 
             // rsb
             _ => unimplemented!(),
@@ -223,8 +234,6 @@ impl Cpu {
             WordSource::SP => self.sp,
 
             WordSource::Immediate(word) => word,
-
-            WordSource::SPPlusImmediate(byte) => self.sp.wrapping_add_signed(byte as i16),
         }
     }
 
