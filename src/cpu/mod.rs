@@ -60,6 +60,7 @@ impl Cpu {
             }
             Instruction::LDHL(val) => {
                 let val_unsigned = val as u8;
+
                 self.registers.f.zero = false;
                 self.registers.f.subtract = false;
                 self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
@@ -85,18 +86,22 @@ impl Cpu {
             Instruction::INC8(loc) => {
                 let val = self.resolve_byte_source(bus, loc.into());
                 let new_val = val.wrapping_add(1);
+
                 self.registers.f.zero = new_val == 0;
                 self.registers.f.subtract = false;
                 self.registers.f.half_carry = (val & 0x0F) == 0x0F; // Overflow if 0bxxxx1111
+
                 self.write_byte_dest(bus, loc.into(), new_val);
                 false
             }
             Instruction::DEC8(loc) => {
                 let val = self.resolve_byte_source(bus, loc.into());
                 let new_val = val.wrapping_sub(1);
+
                 self.registers.f.zero = new_val == 0;
                 self.registers.f.subtract = true;
                 self.registers.f.half_carry = (val & 0x0F) == 0x00; // Overflow if 0bxxxx0000
+
                 self.write_byte_dest(bus, loc.into(), new_val);
                 false
             }
@@ -116,8 +121,9 @@ impl Cpu {
                 let value = self.resolve_word_source(source);
                 let hl = self.registers.get_hl();
                 let (new_hl, carry) = hl.overflowing_add(value);
+
                 self.registers.f.subtract = false;
-                self.registers.f.half_carry = (value & 0x0FFF) + (hl & 0x0FFF) > 0x0FFF;
+                self.registers.f.half_carry = (hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF;
                 self.registers.f.carry = carry;
 
                 self.registers.set_hl(new_hl);
@@ -125,6 +131,7 @@ impl Cpu {
             }
             Instruction::ADDSP(val) => {
                 let val_unsigned = val as u8;
+
                 self.registers.f.zero = false;
                 self.registers.f.subtract = false;
                 self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
@@ -137,9 +144,10 @@ impl Cpu {
                 let value = self.resolve_byte_source(bus, source);
                 let a = self.registers.a;
                 let (new_a, carry) = a.overflowing_add(value);
+
                 self.registers.f.zero = new_a == 0;
                 self.registers.f.subtract = false;
-                self.registers.f.half_carry = (value & 0x0F) + (a & 0x0F) > 0x0F;
+                self.registers.f.half_carry = (a & 0x0F) + (value & 0x0F) > 0x0F;
                 self.registers.f.carry = carry;
 
                 self.registers.a = new_a;
@@ -148,12 +156,143 @@ impl Cpu {
             Instruction::ADC(source) => {
                 let value = self.resolve_byte_source(bus, source);
                 let a = self.registers.a;
-                let c_flag = if self.registers.f.carry { 1 } else { 0 };
-                let (new_a, carry) = a.overflowing_add(value + c_flag);
+                let c = if self.registers.f.carry { 1 } else { 0 };
+                let new_word_a = (a as u16) + (value as u16) + (c as u16);
+                let new_byte_a = new_word_a as u8;
+
+                self.registers.f.zero = new_byte_a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry =  (a & 0x0F) + (value & 0x0F) + c > 0x0F;
+                self.registers.f.carry = new_word_a > 0xFF;
+
+                self.registers.a = new_byte_a;
+                false
+            }
+            Instruction::SUB(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let (new_a, carry) = a.overflowing_sub(value);
+
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (a & 0x0F) < (value & 0x0F);
+                self.registers.f.carry = carry;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::SBC(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let c = if self.registers.f.carry { 1 } else { 0 };
+                let new_word_a = (a as i16) - (value as i16) - c;
+                let new_byte_a = new_word_a as u8;
+
+                self.registers.f.zero = new_byte_a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry =  (a & 0x0F) as i16 - (value & 0x0F) as i16 - c < 0;
+                self.registers.f.carry = new_word_a < 0;
+
+                self.registers.a = new_byte_a;
+                false
+            }
+            Instruction::AND(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let new_a = a & value;
+
                 self.registers.f.zero = new_a == 0;
                 self.registers.f.subtract = false;
-                self.registers.f.half_carry = ((value + c_flag) & 0x0F) + (a & 0x0F) > 0x0F;
+                self.registers.f.half_carry = true;
+                self.registers.f.carry = false;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::XOR(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let new_a = a ^ value;
+
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::OR(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let new_a = a | value;
+
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::CP(source) => {
+                let value = self.resolve_byte_source(bus, source);
+                let a = self.registers.a;
+                let (new_a, carry) = a.overflowing_sub(value);
+
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (a & 0x0F) < (value & 0x0F);
                 self.registers.f.carry = carry;
+
+                // Does not update register
+                false
+            }
+            Instruction::DAA => {
+                let a = self.registers.a;
+                let mut adjust = 0x00; // 0x00, 0x06, 0x60 or 0x66
+                let mut carry = false;
+                if self.registers.f.half_carry || (!self.registers.f.subtract && (a & 0x0F) > 0x09) {
+                    adjust |= 0x06;
+                }
+                if self.registers.f.carry || (!self.registers.f.subtract && a > 0x99) {
+                    adjust |= 0x60;
+                    carry = true;
+                }
+                let new_a = match self.registers.f.subtract {
+                    true => a.wrapping_sub(adjust),
+                    false => a.wrapping_add(adjust),
+                };
+
+                self.registers.f.zero = new_a == 0;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = carry;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::SCF => {
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = true;
+
+                false
+            }
+            Instruction::CPL => {
+                let a = self.registers.a;
+                let new_a = !a;
+
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = true;
+
+                self.registers.a = new_a;
+                false
+            }
+            Instruction::CCF => {
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = !self.registers.f.carry;
+
                 false
             }
 
