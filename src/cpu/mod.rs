@@ -1,7 +1,7 @@
 mod instructions;
 mod registers;
 
-use crate::cpu::instructions::{ByteDest, ByteSource, Instruction, WordDest, WordSource};
+use crate::cpu::instructions::{ByteDest, ByteSource, Instruction, JumpCondition, WordDest, WordSource};
 use crate::cpu::registers::Registers;
 use crate::mmu::Bus;
 pub struct Cpu {
@@ -46,6 +46,57 @@ impl Cpu {
             Instruction::NOP => false,
 
             // control/br
+            Instruction::JR(cond, value) => {
+                if (self.jump_condition_reached(cond)) {
+                    self.pc = self.pc.wrapping_add_signed(value as i16);
+                    true
+                } else {
+                    false
+                }
+            }
+            Instruction::JP(cond, source) => {
+                if (self.jump_condition_reached(cond)) {
+                    let value = self.resolve_word_source(source);
+                    self.pc = value;
+                    true
+                } else {
+                    false
+                }
+            }
+            Instruction::RET(cond) => {
+                if (self.jump_condition_reached(cond)) {
+                    let value = bus.read_u16(self.sp);
+                    self.sp = self.sp.wrapping_add(2);
+                    self.pc = value;
+                    true
+                } else {
+                    false
+                }
+            }
+            Instruction::RETI => {
+                let value = bus.read_u16(self.sp);
+                self.sp = self.sp.wrapping_add(2);
+                self.pc = value;
+                self.ime = true;
+                false
+            }
+            Instruction::CALL(cond, value) => {
+                if (self.jump_condition_reached(cond)) {
+                    self.sp = self.sp.wrapping_sub(2);
+                    bus.write_u16(self.sp, self.pc);
+                    self.pc = value;
+                    true
+                } else {
+                    false
+                }
+            }
+            Instruction::RST(lsb) => {
+                self.sp = self.sp.wrapping_sub(2);
+                bus.write_u16(self.sp, self.pc);
+                let msb = 0x00;
+                self.pc = u16::from_le_bytes([lsb, msb]);
+                false
+            }
 
             // lsm
             Instruction::LD8(dest, source) => {
@@ -82,6 +133,7 @@ impl Cpu {
                 self.write_word_dest(bus, dest, value);
                 false
             }
+
             // alu
             Instruction::INC8(loc) => {
                 let val = self.resolve_byte_source(bus, loc.into());
@@ -162,7 +214,7 @@ impl Cpu {
 
                 self.registers.f.zero = new_byte_a == 0;
                 self.registers.f.subtract = false;
-                self.registers.f.half_carry =  (a & 0x0F) + (value & 0x0F) + c > 0x0F;
+                self.registers.f.half_carry = (a & 0x0F) + (value & 0x0F) + c > 0x0F;
                 self.registers.f.carry = new_word_a > 0xFF;
 
                 self.registers.a = new_byte_a;
@@ -190,7 +242,7 @@ impl Cpu {
 
                 self.registers.f.zero = new_byte_a == 0;
                 self.registers.f.subtract = true;
-                self.registers.f.half_carry =  (a & 0x0F) as i16 - (value & 0x0F) as i16 - c < 0;
+                self.registers.f.half_carry = (a & 0x0F) as i16 - (value & 0x0F) as i16 - c < 0;
                 self.registers.f.carry = new_word_a < 0;
 
                 self.registers.a = new_byte_a;
@@ -295,7 +347,6 @@ impl Cpu {
 
                 false
             }
-
             // rsb
             _ => unimplemented!(),
         }
@@ -388,6 +439,16 @@ impl Cpu {
             WordDest::Address(word) => {
                 bus.write_u16(word, value);
             }
+        }
+    }
+
+    fn jump_condition_reached(&self, cond: JumpCondition) -> bool {
+        match cond {
+            JumpCondition::NotZero => !self.registers.f.zero,
+            JumpCondition::Zero => self.registers.f.zero,
+            JumpCondition::NoCarry => !self.registers.f.carry,
+            JumpCondition::Carry => self.registers.f.carry,
+            JumpCondition::Always => true,
         }
     }
 }
