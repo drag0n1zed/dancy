@@ -2,7 +2,7 @@ mod executor;
 mod opcodes;
 mod registers;
 
-use crate::cpu::opcodes::{ByteDest, ByteSource, JumpCondition, WordDest, WordSource};
+use crate::cpu::opcodes::{ByteDest, ByteSource, JumpCondition, WordDest, WordLocation, WordSource};
 use crate::cpu::registers::Registers;
 use crate::mmu::Bus;
 
@@ -62,13 +62,13 @@ impl Cpu {
 
             // LD r, r'
             0x40..=0x7F => {
-                let dest = self.decode_dest((opcode >> 3) & 0b111);
-                let src = self.decode_source(opcode & 0b111);
+                let dest: ByteDest = self.decode_bits_to_location((opcode >> 3) & 0b0000_0111).into();
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_ld8(bus, dest, src).await;
             }
             // LD r, n
             0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
-                let dest = self.decode_dest((opcode >> 3) & 0b111);
+                let dest: ByteDest = self.decode_bits_to_location((opcode >> 3) & 0b0000_0111).into();
                 let val = self.fetch_byte(bus).await;
                 self.run_ld8(bus, dest, ByteSource::Immediate(val)).await;
             }
@@ -163,52 +163,52 @@ impl Cpu {
             // ALU
             // INC r
             0x04 | 0x14 | 0x24 | 0x34 | 0x0C | 0x1C | 0x2C | 0x3C => {
-                let loc = self.decode_bits_to_location((opcode >> 3) & 0b111);
+                let loc = self.decode_bits_to_location((opcode >> 3) & 0b0000_0111);
                 self.run_inc8(bus, loc).await;
             }
             // DEC r
             0x05 | 0x15 | 0x25 | 0x35 | 0x0D | 0x1D | 0x2D | 0x3D => {
-                let loc = self.decode_bits_to_location((opcode >> 3) & 0b111);
+                let loc = self.decode_bits_to_location((opcode >> 3) & 0b0000_0111);
                 self.run_dec8(bus, loc).await;
             }
             // ADD A, r
             0x80..=0x87 => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_add(bus, src).await;
             }
             // ADC A, r
             0x88..=0x8F => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_adc(bus, src).await;
             }
             // SUB A, r
             0x90..=0x97 => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_sub(bus, src).await;
             }
             // SBC A, r
             0x98..=0x9F => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_sbc(bus, src).await;
             }
             // AND A, r
             0xA0..=0xA7 => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_and(bus, src).await;
             }
             // XOR A, r
             0xA8..=0xAF => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_xor(bus, src).await;
             }
             // OR A, r
             0xB0..=0xB7 => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_or(bus, src).await;
             }
             // CP A, r
             0xB8..=0xBF => {
-                let src = self.decode_source(opcode & 0b111);
+                let src: ByteSource = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 self.run_cp(bus, src).await;
             }
 
@@ -254,15 +254,15 @@ impl Cpu {
 
             // ALU16
             // INC16
-            0x03 => self.run_inc16(bus, WordDest::BC).await,
-            0x13 => self.run_inc16(bus, WordDest::DE).await,
-            0x23 => self.run_inc16(bus, WordDest::HL).await,
-            0x33 => self.run_inc16(bus, WordDest::SP).await,
+            0x03 => self.run_inc16(bus, WordLocation::BC).await,
+            0x13 => self.run_inc16(bus, WordLocation::DE).await,
+            0x23 => self.run_inc16(bus, WordLocation::HL).await,
+            0x33 => self.run_inc16(bus, WordLocation::SP).await,
             // DEC16
-            0x0B => self.run_dec16(bus, WordDest::BC).await,
-            0x1B => self.run_dec16(bus, WordDest::DE).await,
-            0x2B => self.run_dec16(bus, WordDest::HL).await,
-            0x3B => self.run_dec16(bus, WordDest::SP).await,
+            0x0B => self.run_dec16(bus, WordLocation::BC).await,
+            0x1B => self.run_dec16(bus, WordLocation::DE).await,
+            0x2B => self.run_dec16(bus, WordLocation::HL).await,
+            0x3B => self.run_dec16(bus, WordLocation::SP).await,
             // ADD HL, rr
             0x09 => self.run_addhl(bus, WordSource::BC).await,
             0x19 => self.run_addhl(bus, WordSource::DE).await,
@@ -312,7 +312,7 @@ impl Cpu {
             // CBs
             0xCB => {
                 let cb_opcode = self.fetch_byte(bus).await; // +1 cycle
-                let dest = self.decode_dest(cb_opcode & 0b0000_0111);
+                let dest: ByteDest = self.decode_bits_to_location(opcode & 0b0000_0111).into();
                 let bit = (cb_opcode & 0b0011_1000) >> 3;
                 match cb_opcode {
                     0x00..=0x07 => self.run_rlc(dest),

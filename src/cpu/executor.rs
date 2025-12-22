@@ -1,5 +1,5 @@
 use crate::cpu::Cpu;
-use crate::cpu::opcodes::{ByteDest, ByteLocation, ByteSource, JumpCondition, WordDest, WordSource};
+use crate::cpu::opcodes::{ByteDest, ByteLocation, ByteSource, JumpCondition, WordDest, WordLocation, WordSource};
 use crate::mmu::Bus;
 
 impl Cpu {
@@ -136,21 +136,21 @@ impl Cpu {
         self.write_byte_dest(bus, loc.into(), new_val).await;
     }
 
-    pub(super) async fn run_inc16(&mut self, bus: &mut Bus, loc: WordDest) {
-        let value = self.resolve_word_source(bus, self.word_dest_to_src(loc)).await;
-        bus.tick().await; // 16-bit ALU internal cycle
-        self.write_word_dest(bus, loc, value.wrapping_add(1)).await;
+    pub(super) async fn run_inc16(&mut self, bus: &mut Bus, loc: WordLocation) {
+        let value = self.resolve_word_source(bus, loc.into()).await;
+        bus.tick().await; // +1 cycle
+        self.write_word_dest(bus, loc.into(), value.wrapping_add(1)).await;
     }
 
-    pub(super) async fn run_dec16(&mut self, bus: &mut Bus, loc: WordDest) {
-        let value = self.resolve_word_source(bus, self.word_dest_to_src(loc)).await;
-        bus.tick().await; // 16-bit ALU internal cycle
-        self.write_word_dest(bus, loc, value.wrapping_sub(1)).await;
+    pub(super) async fn run_dec16(&mut self, bus: &mut Bus, loc: WordLocation) {
+        let value = self.resolve_word_source(bus, loc.into()).await;
+        bus.tick().await; // +1 cycle
+        self.write_word_dest(bus, loc.into(), value.wrapping_sub(1)).await;
     }
 
     pub(super) async fn run_addhl(&mut self, bus: &mut Bus, source: WordSource) {
         let value = self.resolve_word_source(bus, source).await;
-        bus.tick().await; // Internal cycle
+        bus.tick().await; // +1 cycle
         let hl = self.registers.get_hl();
         let (new_hl, carry) = hl.overflowing_add(value);
 
@@ -323,15 +323,6 @@ impl Cpu {
         self.registers.f.carry = !self.registers.f.carry;
     }
 
-    // opcode decode
-    pub(super) fn decode_dest(&self, bits: u8) -> ByteDest {
-        self.decode_bits_to_location(bits).into()
-    }
-
-    pub(super) fn decode_source(&self, bits: u8) -> ByteSource {
-        self.decode_bits_to_location(bits).into()
-    }
-
     pub(super) fn decode_bits_to_location(&self, bits: u8) -> ByteLocation {
         match bits {
             0b000 => ByteLocation::B,
@@ -342,17 +333,6 @@ impl Cpu {
             0b101 => ByteLocation::L,
             0b110 => ByteLocation::IndHL,
             0b111 => ByteLocation::A,
-            _ => unreachable!(),
-        }
-    }
-
-    // Helper to map INC16/DEC16 Dest to Source logic (since it reads then writes)
-    fn word_dest_to_src(&self, dest: WordDest) -> WordSource {
-        match dest {
-            WordDest::BC => WordSource::BC,
-            WordDest::DE => WordSource::DE,
-            WordDest::HL => WordSource::HL,
-            WordDest::SP => WordSource::SP,
             _ => unreachable!(),
         }
     }
