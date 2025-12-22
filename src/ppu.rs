@@ -20,7 +20,7 @@ impl Ppu {
     }
 
     pub fn update_front_buffer(&mut self) {
-        self.front_buffer.copy_from_slice(&self.back_buffer);
+        std::mem::swap(&mut self.back_buffer, &mut self.front_buffer);
     }
 
     pub fn read_vram(&self, addr: u16) -> u8 {
