@@ -60,7 +60,7 @@ pub enum WordDest {
 }
 
 // A helper enum, gets .into()d into Source / Destination enums
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum ByteLocation {
     A,
     B,

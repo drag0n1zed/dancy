@@ -5,9 +5,9 @@ use crate::mmu::Bus;
 impl Cpu {
     // Fetchers
     pub(super) async fn fetch_byte(&mut self, bus: &mut Bus) -> u8 {
-        let b = bus.read(self.pc).await;
+        let byte = bus.read(self.pc).await;
         self.pc = self.pc.wrapping_add(1);
-        b
+        byte
     }
 
     pub(super) async fn fetch_word(&mut self, bus: &mut Bus) -> u16 {
@@ -41,15 +41,30 @@ impl Cpu {
     }
 
     pub(super) async fn run_ret(&mut self, bus: &mut Bus, cond: JumpCondition) {
-        bus.tick().await; // +1 cycle
-        if self.jump_condition_reached(cond) {
-            if let JumpCondition::Always = cond {
-            } else {
-                bus.tick().await; // +1 cycle if conditional match
+        match cond {
+            JumpCondition::Always => {
+                // RET (Unconditional 0xC9)
+                // M2 & M3: Read PC from stack
+                let value = bus.read_u16(self.sp).await;
+                self.sp = self.sp.wrapping_add(2);
+                // M4: Internal delay (PC = WZ)
+                bus.tick().await;
+                self.pc = value;
             }
-            let value = bus.read_u16(self.sp).await;
-            self.sp = self.sp.wrapping_add(2);
-            self.pc = value;
+            _ => {
+                // RET cc (Conditional)
+                // M2: Internal delay (Condition Check)
+                bus.tick().await;
+                if self.jump_condition_reached(cond) {
+                    // M3 & M4: Read PC from stack
+                    let value = bus.read_u16(self.sp).await;
+                    self.sp = self.sp.wrapping_add(2);
+                    // M5: Internal delay (PC = WZ)
+                    bus.tick().await;
+                    self.pc = value;
+                }
+                // If condition fails, it simply exits after M2 (Total 2)
+            }
         }
     }
 
@@ -91,13 +106,11 @@ impl Cpu {
 
     pub(super) async fn run_ldhl(&mut self, bus: &mut Bus, val: i8) {
         let val_unsigned = val as u8;
-
-        self.registers.f.zero = false;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
-        self.registers.f.carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
-
         let sp_plus_val = self.sp.wrapping_add_signed(val as i16);
+        let half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
+        let carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
+
+        self.update_flags(Some(false), Some(false), Some(half_carry), Some(carry));
         self.write_word_dest(bus, WordDest::HL, sp_plus_val).await;
     }
 
@@ -117,22 +130,18 @@ impl Cpu {
     pub(super) async fn run_inc8(&mut self, bus: &mut Bus, loc: ByteLocation) {
         let val = self.resolve_byte_source(bus, loc.into()).await;
         let new_val = val.wrapping_add(1);
+        let half_carry = (val & 0x0F) == 0x0F;
 
-        self.registers.f.zero = new_val == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (val & 0x0F) == 0x0F;
-
+        self.update_flags(Some(new_val == 0), Some(false), Some(half_carry), None);
         self.write_byte_dest(bus, loc.into(), new_val).await;
     }
 
     pub(super) async fn run_dec8(&mut self, bus: &mut Bus, loc: ByteLocation) {
         let val = self.resolve_byte_source(bus, loc.into()).await;
         let new_val = val.wrapping_sub(1);
+        let half_carry = (val & 0x0F) == 0x00;
 
-        self.registers.f.zero = new_val == 0;
-        self.registers.f.subtract = true;
-        self.registers.f.half_carry = (val & 0x0F) == 0x00;
-
+        self.update_flags(Some(new_val == 0), Some(true), Some(half_carry), None);
         self.write_byte_dest(bus, loc.into(), new_val).await;
     }
 
@@ -153,21 +162,18 @@ impl Cpu {
         bus.tick().await; // +1 cycle
         let hl = self.registers.get_hl();
         let (new_hl, carry) = hl.overflowing_add(value);
+        let half_carry = (hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF;
 
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF;
-        self.registers.f.carry = carry;
-
+        self.update_flags(None, Some(false), Some(half_carry), Some(carry));
         self.registers.set_hl(new_hl);
     }
 
     pub(super) async fn run_addsp(&mut self, _bus: &mut Bus, val: i8) {
         let val_unsigned = val as u8;
+        let half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
+        let carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
 
-        self.registers.f.zero = false;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.sp & 0x000F) + (val_unsigned & 0x0F) as u16 > 0x000F;
-        self.registers.f.carry = (self.sp & 0x00FF) + val_unsigned as u16 > 0xFF;
+        self.update_flags(Some(false), Some(false), Some(half_carry), Some(carry));
 
         self.sp = self.sp.wrapping_add_signed(val as i16);
     }
@@ -176,12 +182,9 @@ impl Cpu {
         let value = self.resolve_byte_source(bus, source).await;
         let a = self.registers.a;
         let (new_a, carry) = a.overflowing_add(value);
+        let half_carry = (a & 0x0F) + (value & 0x0F) > 0x0F;
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (a & 0x0F) + (value & 0x0F) > 0x0F;
-        self.registers.f.carry = carry;
-
+        self.update_flags(Some(new_a == 0), Some(false), Some(half_carry), Some(carry));
         self.registers.a = new_a;
     }
 
@@ -191,12 +194,10 @@ impl Cpu {
         let c = if self.registers.f.carry { 1 } else { 0 };
         let new_word_a = (a as u16) + (value as u16) + (c as u16);
         let new_byte_a = new_word_a as u8;
+        let half_carry = (a & 0x0F) + (value & 0x0F) + c > 0x0F;
+        let carry = new_word_a > 0xFF;
 
-        self.registers.f.zero = new_byte_a == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (a & 0x0F) + (value & 0x0F) + c > 0x0F;
-        self.registers.f.carry = new_word_a > 0xFF;
-
+        self.update_flags(Some(new_byte_a == 0), Some(false), Some(half_carry), Some(carry));
         self.registers.a = new_byte_a;
     }
 
@@ -204,12 +205,9 @@ impl Cpu {
         let value = self.resolve_byte_source(bus, source).await;
         let a = self.registers.a;
         let (new_a, carry) = a.overflowing_sub(value);
+        let half_carry = (a & 0x0F) < (value & 0x0F);
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = true;
-        self.registers.f.half_carry = (a & 0x0F) < (value & 0x0F);
-        self.registers.f.carry = carry;
-
+        self.update_flags(Some(new_a == 0), Some(true), Some(half_carry), Some(carry));
         self.registers.a = new_a;
     }
 
@@ -219,11 +217,10 @@ impl Cpu {
         let c = if self.registers.f.carry { 1 } else { 0 };
         let new_word_a = (a as i16) - (value as i16) - c;
         let new_byte_a = new_word_a as u8;
+        let half_carry = (a & 0x0F) as i16 - (value & 0x0F) as i16 - c < 0;
+        let carry = new_word_a < 0;
 
-        self.registers.f.zero = new_byte_a == 0;
-        self.registers.f.subtract = true;
-        self.registers.f.half_carry = (a & 0x0F) as i16 - (value & 0x0F) as i16 - c < 0;
-        self.registers.f.carry = new_word_a < 0;
+        self.update_flags(Some(new_byte_a == 0), Some(true), Some(half_carry), Some(carry));
 
         self.registers.a = new_byte_a;
     }
@@ -233,11 +230,7 @@ impl Cpu {
         let a = self.registers.a;
         let new_a = a & value;
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = true;
-        self.registers.f.carry = false;
-
+        self.update_flags(Some(new_a == 0), Some(false), Some(true), Some(false));
         self.registers.a = new_a;
     }
 
@@ -246,11 +239,7 @@ impl Cpu {
         let a = self.registers.a;
         let new_a = a ^ value;
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = false;
-
+        self.update_flags(Some(new_a == 0), Some(false), Some(false), Some(false));
         self.registers.a = new_a;
     }
 
@@ -259,11 +248,7 @@ impl Cpu {
         let a = self.registers.a;
         let new_a = a | value;
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = false;
-
+        self.update_flags(Some(new_a == 0), Some(false), Some(false), Some(false));
         self.registers.a = new_a;
     }
 
@@ -271,17 +256,15 @@ impl Cpu {
         let value = self.resolve_byte_source(bus, source).await;
         let a = self.registers.a;
         let (new_a, carry) = a.overflowing_sub(value);
+        let half_carry = (a & 0x0F) < (value & 0x0F);
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.subtract = true;
-        self.registers.f.half_carry = (a & 0x0F) < (value & 0x0F);
-        self.registers.f.carry = carry;
+        self.update_flags(Some(new_a == 0), Some(true), Some(half_carry), Some(carry));
     }
 
     pub(super) async fn run_daa(&mut self) {
         let a = self.registers.a;
         let mut adjust = 0x00;
-        let mut carry = false;
+        let mut carry = self.registers.f.carry;
         if self.registers.f.half_carry || (!self.registers.f.subtract && (a & 0x0F) > 0x09) {
             adjust |= 0x06;
         }
@@ -294,33 +277,145 @@ impl Cpu {
             false => a.wrapping_add(adjust),
         };
 
-        self.registers.f.zero = new_a == 0;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = carry;
-
+        self.update_flags(Some(new_a == 0), None, Some(false), Some(carry));
         self.registers.a = new_a;
     }
 
     pub(super) async fn run_scf(&mut self) {
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = true;
+        self.update_flags(None, Some(false), Some(false), Some(false));
     }
 
     pub(super) async fn run_cpl(&mut self) {
         let a = self.registers.a;
         let new_a = !a;
 
-        self.registers.f.subtract = true;
-        self.registers.f.half_carry = true;
-
+        self.update_flags(None, Some(true), Some(true), None);
         self.registers.a = new_a;
     }
 
     pub(super) async fn run_ccf(&mut self) {
+        self.update_flags(None, Some(false), Some(false), Some(!self.registers.f.carry));
+    }
+
+    pub(super) async fn run_rlc(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b7 = old_val >> 7;
+            let new_val = (old_val << 1) | b7;
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b7 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_rlca(&mut self, bus: &mut Bus) {
+        self.run_rlc(bus, ByteLocation::A).await;
+        self.update_flags(Some(false), None, None, None); // Accumulator counterpart sets z = 0
+    }
+    pub(super) async fn run_rrc(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b0 = old_val & 0b0000_0001;
+            let new_val = (old_val >> 1) | (b0 << 7);
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b0 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_rrca(&mut self, bus: &mut Bus) {
+        self.run_rrc(bus, ByteLocation::A).await;
+        self.update_flags(Some(false), None, None, None); // Accumulator counterpart sets z = 0
+    }
+    pub(super) async fn run_rl(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b7 = old_val >> 7;
+            let carry = if cpu.registers.f.carry { 1 } else { 0 };
+            let new_val = (old_val << 1) | carry;
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b7 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_rla(&mut self, bus: &mut Bus) {
+        self.run_rl(bus, ByteLocation::A).await;
+        self.update_flags(Some(false), None, None, None); // Accumulator counterpart sets z = 0
+    }
+    pub(super) async fn run_rr(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b0 = old_val & 0b0000_0001;
+            let carry = if cpu.registers.f.carry { 1 } else { 0 };
+            let new_val = (old_val >> 1) | (carry << 7);
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b0 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_rra(&mut self, bus: &mut Bus) {
+        self.run_rr(bus, ByteLocation::A).await;
+        self.update_flags(Some(false), None, None, None); // Accumulator counterpart sets z = 0
+    }
+    pub(super) async fn run_sla(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b7 = old_val >> 7;
+            let new_val = old_val << 1;
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b7 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_sra(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b0 = old_val & 0b0000_0001;
+            let b7 = old_val >> 7;
+            let new_val = (old_val >> 1) | (b7 << 7);
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b0 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_swap(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let old_lo = old_val & 0b0000_1111;
+            let old_hi = (old_val & 0b1111_0000) >> 4;
+            let new_val = (old_lo << 4) | old_hi;
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(false));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_srl(&mut self, bus: &mut Bus, loc: ByteLocation) {
+        self.modify_loc(bus, loc, |cpu, old_val| {
+            let b0 = old_val & 0b0000_0001;
+            let new_val = old_val >> 1;
+            cpu.update_flags(Some(new_val == 0), Some(false), Some(false), Some(b0 == 1));
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_bit(&mut self, bus: &mut Bus, loc: ByteLocation, bit: u8) {
+        // No write, don't use modify_loc
+        let val = match loc {
+            ByteLocation::IndHL => bus.read(self.registers.get_hl()).await, // +1 cycle
+            _ => self.read_reg_sync(loc),
+        };
+        let target_bit = (val >> bit) & 0b0000_0001;
+
+        self.registers.f.zero = target_bit == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = false;
-        self.registers.f.carry = !self.registers.f.carry;
+        self.registers.f.half_carry = true;
+    }
+    pub(super) async fn run_res(&mut self, bus: &mut Bus, loc: ByteLocation, bit: u8) {
+        self.modify_loc(bus, loc, |_cpu, old_val| {
+            let target_bit = 0b0000_0001 << bit;
+            let new_val = old_val & !target_bit;
+            new_val
+        })
+        .await;
+    }
+    pub(super) async fn run_set(&mut self, bus: &mut Bus, loc: ByteLocation, bit: u8) {
+        self.modify_loc(bus, loc, |_cpu, old_val| {
+            let target_bit = 0b0000_0001 << bit;
+            let new_val = old_val | target_bit;
+            new_val
+        })
+        .await;
     }
 
     pub(super) fn decode_bits_to_location(&self, bits: u8) -> ByteLocation {
@@ -408,7 +503,7 @@ impl Cpu {
 
     async fn write_word_dest(&mut self, bus: &mut Bus, dest: WordDest, value: u16) {
         match dest {
-            WordDest::AF => self.registers.set_af(value),
+            WordDest::AF => self.registers.set_af(value & 0xFFF0),
             WordDest::BC => self.registers.set_bc(value),
             WordDest::DE => self.registers.set_de(value),
             WordDest::HL => self.registers.set_hl(value),
@@ -426,6 +521,70 @@ impl Cpu {
             JumpCondition::NoCarry => !self.registers.f.carry,
             JumpCondition::Carry => self.registers.f.carry,
             JumpCondition::Always => true,
+        }
+    }
+
+    fn read_reg_sync(&self, loc: ByteLocation) -> u8 {
+        match loc {
+            ByteLocation::A => self.registers.a,
+            ByteLocation::B => self.registers.b,
+            ByteLocation::C => self.registers.c,
+            ByteLocation::D => self.registers.d,
+            ByteLocation::E => self.registers.e,
+            ByteLocation::H => self.registers.h,
+            ByteLocation::L => self.registers.l,
+            ByteLocation::IndHL => unreachable!("IndHL is not a register"),
+        }
+    }
+
+    fn write_reg_sync(&mut self, loc: ByteLocation, val: u8) {
+        match loc {
+            ByteLocation::A => self.registers.a = val,
+            ByteLocation::B => self.registers.b = val,
+            ByteLocation::C => self.registers.c = val,
+            ByteLocation::D => self.registers.d = val,
+            ByteLocation::E => self.registers.e = val,
+            ByteLocation::H => self.registers.h = val,
+            ByteLocation::L => self.registers.l = val,
+            ByteLocation::IndHL => unreachable!("IndHL is not a register"),
+        }
+    }
+
+    async fn modify_loc<F>(&mut self, bus: &mut Bus, loc: ByteLocation, op: F)
+    where
+        F: FnOnce(&mut Self, u8) -> u8,
+    {
+        let address = if loc == ByteLocation::IndHL {
+            Some(self.registers.get_hl())
+        } else {
+            None
+        };
+
+        let old_val = match address {
+            Some(addr) => bus.read(addr).await,
+            None => self.read_reg_sync(loc),
+        };
+
+        let new_val = op(self, old_val);
+
+        match address {
+            Some(addr) => bus.write(addr, new_val).await,
+            None => self.write_reg_sync(loc, new_val),
+        }
+    }
+
+    fn update_flags(&mut self, z: Option<bool>, n: Option<bool>, h: Option<bool>, c: Option<bool>) {
+        if let Some(val) = z {
+            self.registers.f.zero = val;
+        }
+        if let Some(val) = n {
+            self.registers.f.subtract = val;
+        }
+        if let Some(val) = h {
+            self.registers.f.half_carry = val;
+        }
+        if let Some(val) = c {
+            self.registers.f.carry = val;
         }
     }
 }

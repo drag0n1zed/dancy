@@ -72,8 +72,8 @@ impl Bus {
 
     pub async fn write_u16(&mut self, addr: u16, value: u16) {
         let [lo, hi] = value.to_le_bytes();
+        self.write(addr.wrapping_add(1), hi).await; // write High byte first
         self.write(addr, lo).await;
-        self.write(addr.wrapping_add(1), hi).await;
     }
 
     pub fn raw_read(&self, addr: u16) -> u8 {

@@ -312,31 +312,31 @@ impl Cpu {
             // CBs
             0xCB => {
                 let cb_opcode = self.fetch_byte(bus).await; // +1 cycle
-                let dest: ByteDest = self.decode_bits_to_location(opcode & 0b0000_0111).into();
+                let loc = self.decode_bits_to_location(cb_opcode & 0b0000_0111);
                 let bit = (cb_opcode & 0b0011_1000) >> 3;
                 match cb_opcode {
-                    0x00..=0x07 => self.run_rlc(dest),
-                    0x08..=0x0F => self.run_rrc(dest),
-                    0x10..=0x17 => self.run_rl(dest),
-                    0x18..=0x1F => self.run_rr(dest),
-                    0x20..=0x27 => self.run_sla(dest),
-                    0x28..=0x2F => self.run_sra(dest),
-                    0x30..=0x37 => self.run_swap(dest),
-                    0x38..=0x3F => self.run_srl(dest),
-                    0x40..=0x7F => self.run_bit(dest, bit),
-                    0x80..=0xBF => self.run_res(dest, bit),
-                    0xC0..=0xFF => self.run_set(dest, bit),
+                    0x00..=0x07 => self.run_rlc(bus, loc).await,
+                    0x08..=0x0F => self.run_rrc(bus, loc).await,
+                    0x10..=0x17 => self.run_rl(bus, loc).await,
+                    0x18..=0x1F => self.run_rr(bus, loc).await,
+                    0x20..=0x27 => self.run_sla(bus, loc).await,
+                    0x28..=0x2F => self.run_sra(bus, loc).await,
+                    0x30..=0x37 => self.run_swap(bus, loc).await,
+                    0x38..=0x3F => self.run_srl(bus, loc).await,
+                    0x40..=0x7F => self.run_bit(bus, loc, bit).await,
+                    0x80..=0xBF => self.run_res(bus, loc, bit).await,
+                    0xC0..=0xFF => self.run_set(bus, loc, bit).await,
                 }
             }
 
             // RLCA
-            0x07 => todo!("RLA"),
+            0x07 => self.run_rlca(bus).await,
             // RLA
-            0x17 => todo!("RLA"),
+            0x17 => self.run_rla(bus).await,
             // RRCA
-            0x0F => todo!("RRCA"),
+            0x0F => self.run_rrca(bus).await,
             // RRA
-            0x1F => todo!("RRA"),
+            0x1F => self.run_rra(bus).await,
 
             0xD3 | 0xE3 | 0xE4 | 0xF4 | 0xDB | 0xEB | 0xEC | 0xFC | 0xDD | 0xED | 0xFD => {
                 panic!("Illegal opcode: {:#04X}", opcode);
