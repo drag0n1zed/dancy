@@ -54,38 +54,42 @@ impl Registers {
 
     pub fn get_af(&self) -> u16 {
         let flags: u8 = self.f.into();
-        ((self.a as u16) << 8) | flags as u16
+        u16::from_le_bytes([flags, self.a])
     }
 
     pub fn set_af(&mut self, value: u16) {
-        self.a = ((value & 0xFF00) >> 8) as u8;
-        self.f = ((value & 0x00F0) as u8).into();
+        let [flags, a] = value.to_le_bytes();
+        self.a = a;
+        self.f = flags.into();
     }
 
     pub fn get_bc(&self) -> u16 {
-        ((self.b as u16) << 8) | (self.c as u16)
+        u16::from_le_bytes([self.c, self.b])
     }
 
     pub fn set_bc(&mut self, value: u16) {
-        self.b = ((value & 0xFF00) >> 8) as u8;
-        self.c = (value & 0x00FF) as u8;
+        let [c, b] = value.to_le_bytes();
+        self.b = b;
+        self.c = c;
     }
 
     pub fn get_de(&self) -> u16 {
-        ((self.d as u16) << 8) | (self.e as u16)
+        u16::from_le_bytes([self.e, self.d])
     }
 
     pub fn set_de(&mut self, value: u16) {
-        self.d = ((value & 0xFF00) >> 8) as u8;
-        self.e = (value & 0x00FF) as u8;
+        let [e, d] = value.to_le_bytes();
+        self.d = d;
+        self.e = e;
     }
 
     pub fn get_hl(&self) -> u16 {
-        ((self.h as u16) << 8) | (self.l as u16)
+        u16::from_le_bytes([self.l, self.h])
     }
 
     pub fn set_hl(&mut self, value: u16) {
-        self.h = ((value & 0xFF00) >> 8) as u8;
-        self.l = (value & 0x00FF) as u8;
+        let [l, h] = value.to_le_bytes();
+        self.h = h;
+        self.l = l;
     }
 }

@@ -1,7 +1,25 @@
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+
 use crate::cartridge::Cartridge;
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
 use crate::timer::Timer;
+
+struct Yield(bool);
+impl Future for Yield {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.0 {
+            Poll::Ready(())
+        } else {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
 
 pub struct Bus {
     cartridge: Cartridge,
@@ -27,7 +45,38 @@ impl Bus {
             interrupt_enable: 0,
         }
     }
-    pub fn read(&self, addr: u16) -> u8 {
+
+    pub async fn tick(&mut self) {
+        self.ppu.step(4);
+        self.timer.step(4);
+        Yield(false).await;
+        // TODO
+    }
+
+    pub async fn read(&mut self, addr: u16) -> u8 {
+        let value = self.raw_read(addr);
+        self.tick().await;
+        value
+    }
+
+    pub async fn write(&mut self, addr: u16, value: u8) {
+        self.raw_write(addr, value);
+        self.tick().await;
+    }
+
+    pub async fn read_u16(&mut self, addr: u16) -> u16 {
+        let lo = self.read(addr).await;
+        let hi = self.read(addr.wrapping_add(1)).await;
+        u16::from_le_bytes([lo, hi])
+    }
+
+    pub async fn write_u16(&mut self, addr: u16, value: u16) {
+        let [lo, hi] = value.to_le_bytes();
+        self.write(addr, lo).await;
+        self.write(addr.wrapping_add(1), hi).await;
+    }
+
+    pub fn raw_read(&self, addr: u16) -> u8 {
         match addr {
             // ROM bank 00
             0x0000..=0x3FFF => self.cartridge.read(addr),
@@ -68,13 +117,7 @@ impl Bus {
         }
     }
 
-    pub fn read_u16(&self, addr: u16) -> u16 {
-        let lsb = self.read(addr);
-        let msb = self.read(addr.wrapping_add(1));
-        u16::from_le_bytes([lsb, msb])
-    }
-
-    pub fn write(&mut self, addr: u16, value: u8) {
+    pub fn raw_write(&mut self, addr: u16, value: u8) {
         match addr {
             // Cartridge ROM
             0x0000..=0x7FFF => self.cartridge.write(addr, value),
@@ -107,10 +150,5 @@ impl Bus {
             0xFFFF => self.interrupt_enable = value,
             _ => unimplemented!("Unimplemented address {:04X}", addr),
         }
-    }
-    pub fn write_u16(&mut self, addr: u16, value: u16) {
-        let [lsb, msb] = value.to_le_bytes();
-        self.write(addr, lsb);
-        self.write(addr.wrapping_add(1), msb);
     }
 }

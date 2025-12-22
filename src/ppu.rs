@@ -10,6 +10,11 @@ impl Ppu {
             oam: [0; 160],
         }
     }
+
+    pub fn step(&mut self, t_cycles: u32) {
+        todo!();
+    }
+
     pub fn read_vram(&self, addr: u16) -> u8 {
         self.vram[(addr - 0x8000) as usize]
     }
