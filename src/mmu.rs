@@ -70,10 +70,17 @@ impl Bus {
         u16::from_le_bytes([lo, hi])
     }
 
-    pub async fn write_u16(&mut self, addr: u16, value: u16) {
+    pub async fn write_u16(&mut self, addr: u16, value: u16, le: bool) {
         let [lo, hi] = value.to_le_bytes();
-        self.write(addr.wrapping_add(1), hi).await; // write High byte first
-        self.write(addr, lo).await;
+        if le {
+            // LD (nn), SP
+            self.write(addr, lo).await;
+            self.write(addr.wrapping_add(1), hi).await;
+        } else {
+            // Everything else (stack operation)
+            self.write(addr.wrapping_add(1), hi).await;
+            self.write(addr, lo).await;
+        }
     }
 
     pub fn raw_read(&self, addr: u16) -> u8 {
@@ -89,9 +96,9 @@ impl Bus {
             // Work RAM
             0xC000..=0xCFFF => self.wram[(addr - 0xC000) as usize],
             // Work RAM (In CGB mode, switchable bank 1–7)
-            0xD000..=0xDFFF => self.wram[(addr - 0xD000) as usize],
+            0xD000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             // Echo RAM
-            0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize],
+            0xE000..=0xFDFF => self.raw_read(addr - 0x2000),
             // Object Attribute Memory
             0xFE00..=0xFE9F => self.ppu.read_oam(addr),
             // Unusable memory

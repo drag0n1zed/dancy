@@ -81,7 +81,7 @@ impl Cpu {
         if self.jump_condition_reached(cond) {
             bus.tick().await; // +1 cycle
             self.sp = self.sp.wrapping_sub(2);
-            bus.write_u16(self.sp, self.pc).await; // +2 cycles
+            bus.write_u16(self.sp, self.pc, false).await; // +2 cycles
             self.pc = value;
         }
     }
@@ -89,7 +89,7 @@ impl Cpu {
     pub(super) async fn run_rst(&mut self, bus: &mut Bus, lsb: u8) {
         bus.tick().await; // +1 cycle
         self.sp = self.sp.wrapping_sub(2);
-        bus.write_u16(self.sp, self.pc).await; // +2 cycles
+        bus.write_u16(self.sp, self.pc, false).await; // +2 cycles
         let msb = 0x00;
         self.pc = u16::from_le_bytes([lsb, msb]);
     }
@@ -118,7 +118,7 @@ impl Cpu {
         let value = self.resolve_word_source(bus, source).await;
         bus.tick().await; // Internal cycle
         self.sp = self.sp.wrapping_sub(2);
-        bus.write_u16(self.sp, value).await;
+        bus.write_u16(self.sp, value, false).await;
     }
 
     pub(super) async fn run_pop(&mut self, bus: &mut Bus, dest: WordDest) {
@@ -509,7 +509,7 @@ impl Cpu {
             WordDest::HL => self.registers.set_hl(value),
             WordDest::SP => self.sp = value,
             WordDest::Address(word) => {
-                bus.write_u16(word, value).await;
+                bus.write_u16(word, value, true).await; // Write Low first then High
             }
         }
     }
