@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Instant;
 
 use crate::cartridge::Cartridge;
 use crate::joypad::Joypad;
@@ -30,6 +31,8 @@ pub struct Bus {
     pub joypad: Joypad,
     pub interrupt_flag: u8,   // 0xFF0F
     pub interrupt_enable: u8, // 0xFFFF
+    pub last_frame_time: Instant,
+    pub accumulated_cycles: u32,
 }
 
 impl Bus {
@@ -41,16 +44,24 @@ impl Bus {
             hram: [0; 127],
             timer: Timer::new(),
             joypad: Joypad::new(),
-            interrupt_flag: 0,
-            interrupt_enable: 0,
+            interrupt_flag: 0,   // 0xFF0F
+            interrupt_enable: 0, // 0xFFFF
+            last_frame_time: Instant::now(),
+            accumulated_cycles: 0,
         }
     }
 
     pub async fn tick(&mut self) {
+        // 1. Step hardware
         self.ppu.step(4);
         self.timer.step(4);
-        Yield(false).await;
-        // TODO
+
+        self.accumulated_cycles += 1;
+
+        if self.accumulated_cycles >= 17556 {
+            self.accumulated_cycles = 0;
+            Yield(false).await;
+        }
     }
 
     pub async fn read(&mut self, addr: u16) -> u8 {
@@ -94,9 +105,7 @@ impl Bus {
             // External RAM (on cartridge, for save files)
             0xA000..=0xBFFF => self.cartridge.read(addr),
             // Work RAM
-            0xC000..=0xCFFF => self.wram[(addr - 0xC000) as usize],
-            // Work RAM (In CGB mode, switchable bank 1–7)
-            0xD000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
+            0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             // Echo RAM
             0xE000..=0xFDFF => self.raw_read(addr - 0x2000),
             // Object Attribute Memory
@@ -135,7 +144,7 @@ impl Bus {
             // Work RAM
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = value,
             // Echo RAM
-            0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = value,
+            0xE000..=0xFDFF => self.raw_write(addr - 0x2000, value),
             // Object Attribute Memory
             0xFE00..=0xFE9F => self.ppu.write_oam(addr, value),
             // Unusable memory
