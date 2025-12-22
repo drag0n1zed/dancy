@@ -20,7 +20,7 @@ pub struct EmulatorState {
 }
 
 // FFI entrypoint
-pub struct GbHandle {
+pub struct DancyHandle {
     // Hardware state shared pointer
     state: Rc<RefCell<EmulatorState>>,
     // Persistent asynx execution loop
@@ -29,7 +29,7 @@ pub struct GbHandle {
     frame_ready: FrameSignal,
 }
 
-impl GbHandle {
+impl DancyHandle {
     pub fn new(rom_bytes: Vec<u8>) -> Self {
         let frame_ready = Rc::new(Cell::new(false));
 
