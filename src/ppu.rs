@@ -1,6 +1,8 @@
 pub struct Ppu {
     vram: [u8; 8192],
     oam: [u8; 160],
+    back_buffer: [u8; 160 * 144 * 4],
+    pub front_buffer: [u8; 160 * 144 * 4],
 }
 
 impl Ppu {
@@ -8,11 +10,17 @@ impl Ppu {
         Self {
             vram: [0; 8192],
             oam: [0; 160],
+            back_buffer: [0; 160 * 144 * 4],
+            front_buffer: [0; 160 * 144 * 4],
         }
     }
 
     pub fn step(&mut self, t_cycles: u32) {
-        todo!();
+        todo!("Update LCD state and draw pixels to back_buffer");
+    }
+
+    pub fn update_front_buffer(&mut self) {
+        self.front_buffer.copy_from_slice(&self.back_buffer);
     }
 
     pub fn read_vram(&self, addr: u16) -> u8 {

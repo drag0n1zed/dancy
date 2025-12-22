@@ -1,3 +1,4 @@
+use crate::FrameSignal;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -33,10 +34,11 @@ pub struct Bus {
     pub interrupt_enable: u8, // 0xFFFF
     pub last_frame_time: Instant,
     pub accumulated_cycles: u32,
+    pub frame_ready: FrameSignal,
 }
 
 impl Bus {
-    pub fn new(rom_data: Vec<u8>) -> Self {
+    pub fn new(rom_data: Vec<u8>, frame_ready: FrameSignal) -> Self {
         Bus {
             cartridge: Cartridge::new(rom_data),
             ppu: Ppu::new(),
@@ -48,6 +50,7 @@ impl Bus {
             interrupt_enable: 0, // 0xFFFF
             last_frame_time: Instant::now(),
             accumulated_cycles: 0,
+            frame_ready,
         }
     }
 
@@ -60,6 +63,8 @@ impl Bus {
 
         if self.accumulated_cycles >= 17556 {
             self.accumulated_cycles = 0;
+            self.ppu.update_front_buffer();
+            self.frame_ready.set(true);
             Yield(false).await;
         }
     }
