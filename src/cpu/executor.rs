@@ -73,7 +73,7 @@ impl Cpu {
         self.sp = self.sp.wrapping_add(2);
         bus.tick().await; // +1 cycle
         self.pc = value;
-        self.ime = true;
+        self.ime_countdown = 2;
     }
 
     pub(super) async fn run_call(&mut self, bus: &mut Bus, cond: JumpCondition) {
@@ -485,7 +485,7 @@ impl Cpu {
                 self.registers.set_hl(addr.wrapping_sub(1));
                 bus.write(addr, value).await
             }
-            ByteDest::FF00PlusC => bus.write(0xFF00 | self.registers.c as u16, value).await,
+            ByteDest::FF00PlusC => bus.write(u16::from_le_bytes([self.registers.c, 0xFF]), value).await,
             ByteDest::Address(word) => bus.write(word, value).await,
         }
     }

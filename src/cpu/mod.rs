@@ -11,28 +11,83 @@ pub struct Cpu {
     pub pc: u16,
     pub sp: u16,
     pub ime: bool,
+    pub ime_countdown: u8,
     pub halted: bool,
+    pub halt_bug_active: bool,
 }
 
 impl Cpu {
     pub fn new() -> Self {
         Cpu {
+            // Skip BOOT ROM
             registers: Registers::new(),
             pc: 0x0100,
             sp: 0xFFFE,
             ime: false,
+            ime_countdown: 0,
             halted: false,
+            halt_bug_active: false,
+        }
+    }
+
+    async fn handle_interrupt(&mut self, bus: &mut Bus, pending: u8) {
+        // 2 cycles where nothing happens, write PC to stack, set PC to
+        bus.tick().await;
+        bus.tick().await;
+        self.ime = false;
+        self.sp = self.sp.wrapping_sub(2);
+        bus.write_u16(self.sp, self.pc, false).await; // +2 cycles
+        bus.tick().await;
+        for bit in 0..5 {
+            if pending & (0b0000_0001 << bit) != 0 {
+                self.pc = u16::from_le_bytes([0x40 + 0x08 * bit, 0x00]);
+                return;
+            }
         }
     }
 
     pub async fn step(&mut self, bus: &mut Bus) {
-        if self.halted {
-            bus.tick().await;
-            return;
+        // For EI, set IME to true AFTER the NEXT cycle.
+        if self.ime_countdown > 0 {
+            self.ime_countdown -= 1;
+            if self.ime_countdown == 0 {
+                self.ime = true;
+            }
+        }
+
+        // If IME is set, CPU wakes up
+        if !self.halted {
+            let pending = bus.interrupt_enable & bus.interrupt_flag & 0x1F;
+            if pending != 0 {
+                if self.ime {
+                    self.handle_interrupt(bus, pending).await;
+                }
+            }
+        } else {
+            // If halted
+            bus.tick().await; // +1 cycle
+            let pending = bus.interrupt_enable & bus.interrupt_flag & 0x1F; // Recalculate after the await
+            if pending != 0 {
+                self.halted = false;
+                if self.ime {
+                    self.handle_interrupt(bus, pending).await;
+                }
+                // No interrupt handling / flag reset if ime set to false.
+            } else {
+                return; // Wait until interrupt happens
+            }
         }
 
         let opcode = bus.read(self.pc).await;
         self.pc = self.pc.wrapping_add(1);
+        if self.halt_bug_active {
+            // The opcode is read twice if HALT bug is active. Two scenarios:
+            // 1. Single byte instruction. The instruction runs twice.
+            // 2. Multi byte instruction. The opcode is read again as an operand.
+            // e.g. `ld a, $14` ($3E $14) is read as `ld a, $3E` ($3E $3E) then `inc d` ($14).
+            self.pc = self.pc.wrapping_sub(1);
+            self.halt_bug_active = false;
+        }
 
         match opcode {
             // NOP
@@ -40,24 +95,29 @@ impl Cpu {
 
             // STOP
             0x10 => {
-                let _ = bus.read(self.pc).await; // MUNCH
-                self.pc = self.pc.wrapping_add(1);
-                // todo: implement stop logic
+                // Minimal implementation. Commercial DMG games don't use STOP because it's very buggy.
+                let _useless_byte = self.fetch_byte(bus).await; // MUNCH next byte
+                // Treated as NOP.
+                // TODO: Add screaming warning about STOP usage
             }
 
             // HALT
             0x76 => {
-                self.halted = true;
-                // todo: implement halt logic
+                let pending = bus.interrupt_enable & bus.interrupt_flag & 0x1F;
+                if !self.ime && pending != 0 {
+                    self.halt_bug_active = true;
+                } else {
+                    self.halted = true;
+                }
             }
 
             // DI / EI
             0xF3 => {
                 self.ime = false;
-                // todo: DI
+                self.ime_countdown = 0; // Disable IME and cancel preceding EI instruction
             }
             0xFB => {
-                // todo: EI
+                self.ime_countdown = 2; // Enable IME AFTER the NEXT cycle
             }
 
             // LD r, r'

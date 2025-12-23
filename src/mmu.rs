@@ -55,16 +55,16 @@ impl Bus {
     }
 
     pub async fn tick(&mut self) {
-        // 1. Step hardware
+        // Step hardware
         self.ppu.step(4);
         self.timer.step(4);
 
+        // Count one frame
         self.accumulated_cycles += 1;
-
         if self.accumulated_cycles >= 17556 {
-            self.accumulated_cycles = 0;
-            self.ppu.update_front_buffer();
-            self.frame_ready.set(true);
+            self.accumulated_cycles = 0; // Reset cycle count
+            self.ppu.update_front_buffer(); // Swap front/back buffer
+            self.frame_ready.set(true); // Signal frame ready
             Yield(false).await;
         }
     }

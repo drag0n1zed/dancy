@@ -66,7 +66,7 @@ impl DancyHandle {
         }
     }
 
-    /// FFI should call this 60 times a second (or however many fps you want)
+    // FFI should call this 60 times a second (or however many fps you want)
     pub fn run_frame(&mut self) {
         let waker = dummy_waker();
         let mut cx = Context::from_waker(&waker);
@@ -86,12 +86,12 @@ impl DancyHandle {
         }
     }
 
-    /// Get buffer pixels
+    // Get buffer pixels
     pub fn get_pixels(&self) -> Vec<u8> {
         self.state.borrow().bus.ppu.front_buffer.to_vec()
     }
 
-    /// Update joypad state
+    // Update joypad state
     pub fn update_buttons(&mut self, bitmask: u8) {
         self.state.borrow_mut().bus.joypad.set_buttons(bitmask);
     }
