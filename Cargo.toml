@@ -7,3 +7,4 @@ edition = "2024"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
+log = "0.4.29"

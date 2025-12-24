@@ -96,15 +96,19 @@ impl Cpu {
             // STOP
             0x10 => {
                 // Minimal implementation. Commercial DMG games don't use STOP because it's very buggy.
-                let _useless_byte = self.fetch_byte(bus).await; // MUNCH next byte
-                // Treated as NOP.
-                // TODO: Add screaming warning about STOP usage
+                // https://gbdev.io/pandocs/Reducing_Power_Consumption.html#the-bizarre-case-of-the-game-boy-stop-instruction-before-even-considering-timing
+                let pending = bus.interrupt_enable & bus.interrupt_flag & 0x1F;
+                if pending == 0 {
+                    let _discarded_byte = self.fetch_byte(bus).await;
+                }
+                log::warn!("STOP executed at pc: 0x{:X}", self.pc);
             }
 
             // HALT
             0x76 => {
                 let pending = bus.interrupt_enable & bus.interrupt_flag & 0x1F;
                 if !self.ime && pending != 0 {
+                    // Does not enter HALT mode
                     self.halt_bug_active = true;
                 } else {
                     self.halted = true;
