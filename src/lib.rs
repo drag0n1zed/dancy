@@ -91,9 +91,9 @@ impl DancyHandle {
         self.state.borrow().bus.ppu.front_buffer.to_vec()
     }
 
-    // Update joypad state
-    pub fn update_buttons(&mut self, bitmask: u8) {
-        self.state.borrow_mut().bus.joypad.set_buttons(bitmask);
+    // Update joypad state. 0 = pressed, `↓ ↑ ← → S s B A` as u8
+    pub fn update_buttons(&mut self, pressed: u8) {
+        self.state.borrow_mut().bus.joypad.set_buttons(pressed);
     }
 }
 
