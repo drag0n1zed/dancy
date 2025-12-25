@@ -5,9 +5,8 @@ use std::task::Poll;
 use std::time::Instant;
 
 use crate::cartridge::Cartridge;
-use crate::joypad::Joypad;
-use crate::ppu::Ppu;
-use crate::timer::Timer;
+use crate::io::joypad::Joypad;
+use crate::io::{ppu::Ppu, timer::Timer, serial::Serial};
 
 struct Yield(bool);
 impl Future for Yield {
@@ -30,8 +29,9 @@ pub struct Bus {
     hram: [u8; 127],
     pub timer: Timer,
     pub joypad: Joypad,
-    pub interrupt_flag: u8,   // 0xFF0F
-    pub interrupt_enable: u8, // 0xFFFF
+    pub serial: Serial,
+    pub interrupt_flag: u8,       // 0xFF0F
+    pub interrupt_enable: u8,     // 0xFFFF
     pub last_frame_time: Instant,
     pub accumulated_cycles: u32,
     pub frame_ready: FrameSignal,
@@ -46,8 +46,9 @@ impl Bus {
             hram: [0; 127],
             timer: Timer::new(),
             joypad: Joypad::new(),
-            interrupt_flag: 0,   // 0xFF0F
-            interrupt_enable: 0, // 0xFFFF
+            serial: Serial::new(),
+            interrupt_flag: 0x00,
+            interrupt_enable: 0x00,
             last_frame_time: Instant::now(),
             accumulated_cycles: 0,
             frame_ready,
@@ -58,6 +59,9 @@ impl Bus {
         // Step hardware
         self.ppu.step(4);
         self.timer.step(4);
+        if self.serial.step(4) {
+            self.interrupt_flag |= 0b0000_1000;
+        }
 
         // Count one frame
         self.accumulated_cycles += 1;
@@ -112,29 +116,33 @@ impl Bus {
             // Work RAM
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             // Echo RAM
-            0xE000..=0xFDFF => self.raw_read(addr - 0x2000),
+            0xE000..=0xFDFF => self.wram[((addr - 0x2000) - 0xC000) as usize],
             // Object Attribute Memory
             0xFE00..=0xFE9F => self.ppu.read_oam(addr),
             // Unusable memory
             0xFEA0..=0xFEFF => 0xFF,
-
             // IO Registers
+            0xFF00..=0xFF7F => self.read_io(addr),
+            // High RAM
+            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
+            // Interrupt Enable Register
+            0xFFFF => self.interrupt_enable,
+        }
+    }
+    fn read_io(&self, addr: u16) -> u8 {
+        match addr {
             // Joypad Input
             0xFF00 => self.joypad.read(),
+            // Serial Transfer
+            0xFF01..=0xFF02 => self.serial.read(addr),
             // Timer Registers
             0xFF04..=0xFF07 => self.timer.read(addr),
             // Interrupt Flag Register
             0xFF0F => self.interrupt_flag,
             // PPU Registers
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
-            // TODO: CGB KEY1 0xFF4D - speed switch
             // TODO: APU Registers
-
-            // High RAM
-            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
-            // Interrupt Enable Register
-            0xFFFF => self.interrupt_enable,
-            _ => unimplemented!("Unimplemented address {:04X}", addr),
+            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
         }
     }
 
@@ -154,22 +162,28 @@ impl Bus {
             0xFE00..=0xFE9F => self.ppu.write_oam(addr, value),
             // Unusable memory
             0xFEA0..=0xFEFF => {}
-
             // IO Registers
+            0xFF00..=0xFF7F => self.write_io(addr, value),
+            // High RAM
+            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = value,
+            // Interrupt Enable Register
+            0xFFFF => self.interrupt_enable = value,
+        }
+    }
+
+    fn write_io(&mut self, addr: u16, value: u8) {
+        match addr {
             // Joypad Input
             0xFF00 => self.joypad.write(value),
+            // Serial Transfer
+            0xFF01..=0xFF02 => self.serial.write(addr, value),
             // Timer Registers
             0xFF04..=0xFF07 => self.timer.write(addr, value),
             // Interrupt Flag Register
             0xFF0F => self.interrupt_flag = value,
             // LCD Control
             0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
-
-            // High RAM
-            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = value,
-            // Interrupt Enable Register
-            0xFFFF => self.interrupt_enable = value,
-            _ => unimplemented!("Unimplemented address {:04X}", addr),
+            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
         }
     }
 }
