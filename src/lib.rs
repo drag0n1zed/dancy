@@ -6,10 +6,8 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 pub mod cartridge;
 pub mod cpu;
-pub mod joypad;
+pub mod io;
 pub mod mmu;
-pub mod ppu;
-pub mod timer;
 
 // Is frame done? Check without locking Bus
 pub type FrameSignal = Rc<Cell<bool>>;
@@ -104,4 +102,26 @@ fn dummy_waker() -> Waker {
     }
     static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, no_op, no_op, no_op);
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_cpu_instructions() {
+        let rom = std::fs::read("test_roms/cpu_instrs.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
+        // Initialize env_logger
+        let _logger =env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        for _ in 0..3600 {
+            handle.run_frame();
+        }
+
+    }
 }

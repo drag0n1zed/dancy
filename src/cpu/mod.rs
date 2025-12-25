@@ -31,7 +31,6 @@ impl Cpu {
     }
 
     async fn handle_interrupt(&mut self, bus: &mut Bus, pending: u8) {
-        // 2 cycles where nothing happens, write PC to stack, set PC to
         bus.tick().await;
         bus.tick().await;
         self.ime = false;
@@ -39,7 +38,9 @@ impl Cpu {
         bus.write_u16(self.sp, self.pc, false).await; // +2 cycles
         bus.tick().await;
         for bit in 0..5 {
-            if pending & (0b0000_0001 << bit) != 0 {
+            let target = 0b0000_0001 << bit;
+            if pending & target != 0 {
+                bus.interrupt_flag &= !target;
                 self.pc = u16::from_le_bytes([0x40 + 0x08 * bit, 0x00]);
                 return;
             }
