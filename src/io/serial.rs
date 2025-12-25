@@ -1,10 +1,10 @@
 use log;
 
 pub struct Serial {
-    pub sb: u8,      // 0xFF01
-    pub sc: u8,      // 0xFF02
-    timer: u32,      // Cycle count (0 to 511)
-    shift_count: u8, // Bit count (0 to 8)
+    pub sb: u8,       // 0xFF01
+    pub sc: u8,       // 0xFF02
+    cycle_count: u32, // Cycle count (0 to 511)
+    shift_count: u8,  // Bit count (0 to 8)
     current_char: u8,
     pub log_buffer: String,
 }
@@ -13,7 +13,7 @@ impl Serial {
         Self {
             sb: 0x00,
             sc: 0x00,
-            timer: 0,
+            cycle_count: 0,
             shift_count: 0,
             current_char: 0,
             log_buffer: String::new(),
@@ -36,7 +36,7 @@ impl Serial {
                 self.sc = value;
                 if (value & 0b1000_0001) == 0b1000_0001 {
                     self.current_char = self.sb;
-                    self.timer = 4194304 / 8192; // 512
+                    self.cycle_count = 512; // 4194304 / 8192
                     self.shift_count = 0;
                 }
             }
@@ -46,13 +46,14 @@ impl Serial {
 
     pub fn step(&mut self, t_cycles: u32) -> bool {
         if self.sc & 0b1000_0001 != 0b1000_0001 {
-            return false; // Transfer inactive
+            return false; // Transfer inactive, skip the rest
         }
 
+        let mut request_interrupt = false;
         // If timer reaches 0 or underflows
-        if t_cycles >= self.timer {
-            let underflow = t_cycles - self.timer;
-            self.timer = 512 - underflow;
+        if t_cycles >= self.cycle_count {
+            let underflow = t_cycles - self.cycle_count;
+            self.cycle_count = 512 - underflow;
 
             let _out_bit = self.sb & 0b1000_0000;
             let in_bit = 0b0000_0001;
@@ -71,12 +72,11 @@ impl Serial {
                 } else {
                     self.log_buffer.push(c);
                 }
-
-                return true;
+                request_interrupt = true;
             }
         } else {
-            self.timer -= t_cycles;
+            self.cycle_count -= t_cycles;
         }
-        false
+        request_interrupt
     }
 }

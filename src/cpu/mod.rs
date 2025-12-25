@@ -38,7 +38,7 @@ impl Cpu {
         bus.write_u16(self.sp, self.pc, false).await; // +2 cycles
         bus.tick().await;
         for bit in 0..5 {
-            let target = 0b0000_0001 << bit;
+            let target = 0b1 << bit;
             if pending & target != 0 {
                 bus.interrupt_flag &= !target;
                 self.pc = u16::from_le_bytes([0x40 + 0x08 * bit, 0x00]);
