@@ -1,4 +1,4 @@
-use log::info;
+use log;
 
 pub struct Serial {
     pub sb: u8,      // 0xFF01
@@ -45,36 +45,37 @@ impl Serial {
     }
 
     pub fn step(&mut self, t_cycles: u32) -> bool {
-        if self.sc & 0x80 == 0 {
+        if self.sc & 0b1000_0001 != 0b1000_0001 {
             return false; // Transfer inactive
         }
 
-        self.timer = self.timer.saturating_sub(t_cycles);
+        // If timer reaches 0 or underflows
+        if t_cycles >= self.timer {
+            let underflow = t_cycles - self.timer;
+            self.timer = 512 - underflow;
 
-        // If transfer complete
-        if self.timer == 0 {
             let _out_bit = self.sb & 0b1000_0000;
             let in_bit = 0b0000_0001;
             self.sb = (self.sb << 1) | in_bit;
             self.shift_count += 1;
 
             if self.shift_count == 8 {
-                // 8 bits to shift
+                self.shift_count = 0;
                 self.sc &= 0b0111_1111; // Clear flag
 
                 // Log Output (for testing)
                 let c = self.current_char as char;
                 if c == '\n' {
-                    info!(target: "gb_serial", "{}", self.log_buffer);
+                    log::info!(target: "gb_serial", "{}", self.log_buffer);
                     self.log_buffer.clear();
                 } else {
                     self.log_buffer.push(c);
                 }
 
                 return true;
-            } else {
-                self.timer = 512;
             }
+        } else {
+            self.timer -= t_cycles;
         }
         false
     }
