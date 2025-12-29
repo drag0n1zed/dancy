@@ -109,7 +109,6 @@ mod tests {
     use super::*;
     #[test]
     fn test_cpu_instructions() {
-
         // Initialize env_logger
         let _logger = env_logger::builder()
             .is_test(true)
@@ -130,7 +129,7 @@ mod tests {
             "11-op a,(hl)",
         ];
         for rom_path in &TEST_ROMS {
-            let full_rom_path = format!("test_roms/{}.gb", rom_path);
+            let full_rom_path = format!("test_roms/cpu_instrs/{}.gb", rom_path);
             let rom = std::fs::read(full_rom_path).unwrap();
             let mut handle = DancyHandle::new(rom);
 
@@ -139,13 +138,53 @@ mod tests {
             }
             println!("-------------");
         }
-        /*
-        let rom = std::fs::read("test_roms/09-op r,r.gb").unwrap();
+    }
+
+    #[test]
+    fn test_instruction_timing() {
+        // Initialize env_logger
+        let _logger = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let rom = std::fs::read("test_roms/instr_timing.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
 
         for _ in 0..1500 {
             handle.run_frame();
         }
-         */
+    }
+
+    #[test]
+    fn test_memory_timing() {
+        // Initialize env_logger
+        let _logger = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let rom = std::fs::read("test_roms/mem_timing.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
+        for _ in 0..1500 {
+            handle.run_frame();
+        }
+    }
+
+    #[test]
+    fn test_memory_timing_two() {
+        // Initialize env_logger
+        let _logger = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let rom = std::fs::read("test_roms/mem_timing-2.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
+        for _ in 0..1500 {
+            handle.run_frame();
+        }
     }
 }
