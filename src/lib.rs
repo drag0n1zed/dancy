@@ -129,7 +129,6 @@ mod tests {
             "10-bit ops",
             "11-op a,(hl)",
         ];
-
         for rom_path in &TEST_ROMS {
             let full_rom_path = format!("test_roms/{}.gb", rom_path);
             let rom = std::fs::read(full_rom_path).unwrap();
@@ -138,6 +137,15 @@ mod tests {
             for _ in 0..1500 {
                 handle.run_frame();
             }
+            println!("-------------");
         }
+        /*
+        let rom = std::fs::read("test_roms/09-op r,r.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
+        for _ in 0..1500 {
+            handle.run_frame();
+        }
+         */
     }
 }
