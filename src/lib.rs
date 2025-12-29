@@ -183,6 +183,22 @@ mod tests {
         let rom = std::fs::read("test_roms/mem_timing-2.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
 
+        for _ in 0..100000 {
+            handle.run_frame();
+        }
+    }
+
+    #[test]
+    fn test_interrupt_timing() {
+        // Initialize env_logger
+        let _logger = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let rom = std::fs::read("test_roms/interrupt_time.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
         for _ in 0..1500 {
             handle.run_frame();
         }
