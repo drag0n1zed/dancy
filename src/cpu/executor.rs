@@ -282,7 +282,7 @@ impl Cpu {
     }
 
     pub(super) async fn run_scf(&mut self) {
-        self.update_flags(None, Some(false), Some(false), Some(false));
+        self.update_flags(None, Some(false), Some(false), Some(true));
     }
 
     pub(super) async fn run_cpl(&mut self) {
