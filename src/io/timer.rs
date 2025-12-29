@@ -58,10 +58,10 @@ impl Timer {
         let tac_bit_index = match self.timer_control & 0b0000_0011 {
             // 1024 t-cycles per inc -> 4096Hz -> bit 9 in DIV goes from 1 -> 0.
             // 0b0000_0011_1111_1111 -> 0b0000_0100_0000_0000. Easy formula: n = (log2 tcycles) - 1
-            0x00 => 9,
-            0x01 => 3, // 16 t-cycles
-            0x10 => 5, // 64 t-cycles
-            0x11 => 7, // 256 t-cycles
+            0b00 => 9,
+            0b01 => 3, // 16 t-cycles
+            0b10 => 5, // 64 t-cycles
+            0b11 => 7, // 256 t-cycles
             _ => unreachable!(),
         };
         let tac_target_bit = self.internal_counter & (0b1 << tac_bit_index) != 0;
