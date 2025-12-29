@@ -104,24 +104,40 @@ fn dummy_waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn test_cpu_instructions() {
-        let rom = std::fs::read("test_roms/cpu_instrs.gb").unwrap();
-        let mut handle = DancyHandle::new(rom);
 
         // Initialize env_logger
-        let _logger =env_logger::builder()
+        let _logger = env_logger::builder()
             .is_test(true)
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
-        for _ in 0..3600 {
-            handle.run_frame();
-        }
+        const TEST_ROMS: [&'static str; 11] = [
+            "01-special",
+            "02-interrupts",
+            "03-op sp,hl",
+            "04-op r,imm",
+            "05-op rp",
+            "06-ld r,r",
+            "07-jr,jp,call,ret,rst",
+            "08-misc instrs",
+            "09-op r,r",
+            "10-bit ops",
+            "11-op a,(hl)",
+        ];
 
+        for rom_path in &TEST_ROMS {
+            let full_rom_path = format!("test_roms/{}.gb", rom_path);
+            let rom = std::fs::read(full_rom_path).unwrap();
+            let mut handle = DancyHandle::new(rom);
+
+            for _ in 0..1500 {
+                handle.run_frame();
+            }
+        }
     }
 }

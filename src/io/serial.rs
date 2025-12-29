@@ -66,12 +66,15 @@ impl Serial {
 
                 // Log Output (for testing)
                 let c = self.current_char as char;
+                print!("{}", c);
+                /*
                 if c == '\n' {
                     log::info!(target: "gb_serial", "{}", self.log_buffer);
                     self.log_buffer.clear();
                 } else {
                     self.log_buffer.push(c);
                 }
+                 */
                 request_interrupt = true;
             }
         } else {

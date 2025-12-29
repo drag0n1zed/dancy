@@ -5,8 +5,9 @@ use std::task::Poll;
 use std::time::Instant;
 
 use crate::cartridge::Cartridge;
+use crate::io::apu::Apu;
 use crate::io::joypad::Joypad;
-use crate::io::{ppu::Ppu, timer::Timer, serial::Serial};
+use crate::io::{ppu::Ppu, serial::Serial, timer::Timer};
 
 struct Yield(bool);
 impl Future for Yield {
@@ -25,13 +26,14 @@ impl Future for Yield {
 pub struct Bus {
     cartridge: Cartridge,
     pub ppu: Ppu,
+    pub apu: Apu,
     wram: [u8; 8192],
     hram: [u8; 127],
     pub timer: Timer,
     pub joypad: Joypad,
     pub serial: Serial,
-    pub interrupt_flag: u8,       // 0xFF0F
-    pub interrupt_enable: u8,     // 0xFFFF
+    pub interrupt_flag: u8,   // 0xFF0F
+    pub interrupt_enable: u8, // 0xFFFF
     pub last_frame_time: Instant,
     pub accumulated_cycles: u32,
     pub frame_ready: FrameSignal,
@@ -42,6 +44,7 @@ impl Bus {
         Bus {
             cartridge: Cartridge::new(rom_data),
             ppu: Ppu::new(),
+            apu: Apu::new(),
             wram: [0; 8192],
             hram: [0; 127],
             timer: Timer::new(),
@@ -67,7 +70,8 @@ impl Bus {
 
         // Count one frame
         self.accumulated_cycles += 1;
-        if self.accumulated_cycles >= 17556 { // 4194304 / 59.7 / 4 ≈ 17556
+        if self.accumulated_cycles >= 17556 {
+            // 4194304 / 59.7 / 4 ≈ 17556
             self.accumulated_cycles = 0; // Reset cycle count
             self.ppu.update_front_buffer(); // Swap front/back buffer
             self.frame_ready.set(true); // Signal frame ready
@@ -137,13 +141,16 @@ impl Bus {
             0xFF00 => self.joypad.read(),
             // Serial Transfer
             0xFF01..=0xFF02 => self.serial.read(addr),
-            // Timer Registers
+            // Timer and Divider
             0xFF04..=0xFF07 => self.timer.read(addr),
             // Interrupt Flag Register
             0xFF0F => self.interrupt_flag,
-            // PPU Registers
+            // Audio
+            0xFF10..=0xFF26 => self.apu.read(addr),
+            // LCD Control, Status, Position, Scrolling, and Palettes
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
-            // TODO: APU Registers
+            // CGB KEY1 Double Speed
+            0xFF4D => 0x00, // TODO: cgb double speed
             _ => unimplemented!("Unimplemented IO address {:04X}", addr),
         }
     }
@@ -179,12 +186,16 @@ impl Bus {
             0xFF00 => self.joypad.write(value),
             // Serial Transfer
             0xFF01..=0xFF02 => self.serial.write(addr, value),
-            // Timer Registers
+            // Timer and Divider
             0xFF04..=0xFF07 => self.timer.write(addr, value),
             // Interrupt Flag Register
             0xFF0F => self.interrupt_flag = value,
-            // LCD Control
+            // Audio
+            0xFF10..=0xFF26 => self.apu.write(addr, value),
+            // LCD Control, Status, Position, Scrolling, and Palettes
             0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
+            // CGB KEY1 Double Speed
+            0xFF4D => {} // TODO: cgb double speed
             _ => unimplemented!("Unimplemented IO address {:04X}", addr),
         }
     }

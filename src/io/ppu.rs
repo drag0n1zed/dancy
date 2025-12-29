@@ -16,7 +16,7 @@ impl Ppu {
     }
 
     pub fn step(&mut self, t_cycles: u32) {
-        // todo!("Update LCD state and draw pixels to back_buffer");
+        // TODO: Update LCD state and draw pixels to back_buffer
     }
 
     pub fn update_front_buffer(&mut self) {

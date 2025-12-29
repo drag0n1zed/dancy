@@ -102,7 +102,7 @@ impl Cpu {
                 if pending == 0 {
                     let _discarded_byte = self.fetch_byte(bus).await;
                 }
-                log::warn!("STOP executed at pc: 0x{:X}", self.pc);
+                // log::warn!("STOP executed at pc: 0x{:X}", self.pc);
             }
 
             // HALT
