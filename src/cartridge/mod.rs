@@ -14,7 +14,7 @@ impl Cartridge {
             0x02 => Box::new(Mbc1::new(rom_data, false)), // MBC1 + RAM
             0x03 => Box::new(Mbc1::new(rom_data, true)),  // MBC1 + RAM + BATTERY
             0x08 | 0x09 => panic!("Unsupported MBC0 + RAM"),
-            _ => panic!("Unsupported MBC type"),
+            _ => panic!("Unimplemented MBC type"),
         };
         Self { mbc }
     }

@@ -15,8 +15,10 @@ impl Ppu {
         }
     }
 
-    pub fn step(&mut self, t_cycles: u32) {
+    pub fn step(&mut self, t_cycles: u32) -> bool {
         // TODO: Update LCD state and draw pixels to back_buffer
+
+        false // Return true if VBlank entered
     }
 
     pub fn update_front_buffer(&mut self) {
