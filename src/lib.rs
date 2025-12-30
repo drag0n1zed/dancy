@@ -203,4 +203,20 @@ mod tests {
             handle.run_frame();
         }
     }
+
+    #[test]
+    fn test_halt_bug() {
+        // Initialize env_logger
+        let _logger = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let rom = std::fs::read("test_roms/halt_bug.gb").unwrap();
+        let mut handle = DancyHandle::new(rom);
+
+        for _ in 0..10000 {
+            handle.run_frame();
+        }
+    }
 }

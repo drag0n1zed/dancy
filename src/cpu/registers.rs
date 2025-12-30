@@ -1,4 +1,4 @@
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct FlagsRegister {
     pub zero: bool,
     pub subtract: bool,
@@ -32,7 +32,6 @@ impl From<u8> for FlagsRegister {
     }
 }
 
-#[derive(Default)]
 pub struct Registers {
     pub a: u8,
     pub f: FlagsRegister,
@@ -49,7 +48,16 @@ pub struct Registers {
 
 impl Registers {
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            a: 0x01,
+            f: 0xB0.into(),
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
+        }
     }
 
     pub fn get_af(&self) -> u16 {

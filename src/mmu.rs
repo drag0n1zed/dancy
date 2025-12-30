@@ -74,6 +74,9 @@ impl Bus {
             // 4194304 / 59.7 / 4 ≈ 17556
             self.accumulated_cycles = 0; // Reset cycle count
             self.ppu.update_front_buffer(); // Swap front/back buffer
+
+            self.interrupt_flag |= 0b0000_0001;
+
             self.frame_ready.set(true); // Signal frame ready
             Yield(false).await;
         }
@@ -144,7 +147,7 @@ impl Bus {
             // Timer and Divider
             0xFF04..=0xFF07 => self.timer.read(addr),
             // Interrupt Flag Register
-            0xFF0F => self.interrupt_flag,
+            0xFF0F => self.interrupt_flag | 0xE0,
             // Audio
             0xFF10..=0xFF26 => self.apu.read(addr),
             // LCD Control, Status, Position, Scrolling, and Palettes

@@ -73,7 +73,7 @@ impl Cpu {
         self.sp = self.sp.wrapping_add(2);
         bus.tick().await; // +1 cycle
         self.pc = value;
-        self.ime_countdown = 2;
+        self.ime = true;
     }
 
     pub(super) async fn run_call(&mut self, bus: &mut Bus, cond: JumpCondition) {

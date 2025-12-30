@@ -36,6 +36,9 @@ impl Ppu {
         self.oam[(addr - 0xFE00) as usize] = value;
     }
     pub fn read_register(&self, addr: u16) -> u8 {
+        if addr == 0xFF44 {
+            return 0x90;
+        }
         0
         // TODO
     }

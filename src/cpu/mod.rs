@@ -5,6 +5,42 @@ mod registers;
 use crate::cpu::opcodes::{ByteDest, ByteSource, JumpCondition, WordDest, WordLocation, WordSource};
 use crate::cpu::registers::Registers;
 use crate::mmu::Bus;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+
+pub struct Logger {
+    writer: BufWriter<File>,
+    count: u64,
+    max_lines: u64,
+}
+
+impl Logger {
+    pub fn new(filename: &str, max_lines: u64) -> Self {
+        let file = File::create(filename).expect("Unable to create log file");
+        Self {
+            writer: BufWriter::new(file),
+            count: 0,
+            max_lines,
+        }
+    }
+
+    pub fn log(&mut self, pc: u16, sp: u16, a: u8, f: u8, b: u8, c: u8, d: u8, e: u8, h: u8, l: u8) {
+        if self.count < self.max_lines {
+            // A:01 F:B0 B:00 C:13 D:00 E:D8 H:01 L:4D SP:FFFE PC:0100
+            writeln!(
+                self.writer,
+                "{:04X}  A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X}",
+                pc, a, f, b, c, d, e, h, l, sp, pc,
+            )
+            .unwrap();
+            self.count += 1;
+        } else if self.count == self.max_lines {
+            self.writer.flush().unwrap();
+            self.count += 1;
+            println!("Reached log limit. Stopping log.");
+        }
+    }
+}
 
 pub struct Cpu {
     pub registers: Registers,
@@ -14,6 +50,7 @@ pub struct Cpu {
     pub ime_countdown: u8,
     pub halted: bool,
     pub halt_bug_active: bool,
+    logger: Logger,
 }
 
 impl Cpu {
@@ -27,6 +64,7 @@ impl Cpu {
             ime_countdown: 0,
             halted: false,
             halt_bug_active: false,
+            logger: Logger::new("log.txt", 2000000),
         }
     }
 
@@ -78,6 +116,19 @@ impl Cpu {
                 return; // Wait until interrupt happens
             }
         }
+
+        self.logger.log(
+            self.pc,
+            self.sp,
+            self.registers.a,
+            self.registers.f.into(),
+            self.registers.b,
+            self.registers.c,
+            self.registers.d,
+            self.registers.e,
+            self.registers.h,
+            self.registers.l,
+        );
 
         let opcode = bus.read(self.pc).await;
         self.pc = self.pc.wrapping_add(1);
