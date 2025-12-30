@@ -1,5 +1,3 @@
-use log;
-
 pub struct Serial {
     pub sb: u8,       // 0xFF01
     pub sc: u8,       // 0xFF02
