@@ -25,15 +25,24 @@ impl Future for Yield {
 
 pub struct Bus {
     cartridge: Cartridge,
-    pub ppu: Ppu,
-    pub apu: Apu,
     wram: [u8; 8192],
     hram: [u8; 127],
+
+    pub ppu: Ppu,
+    pub apu: Apu,
+
     pub timer: Timer,
     pub joypad: Joypad,
     pub serial: Serial,
+
+    dma_active: bool,
+    dma_base: u8,
+    dma_byte: u8,
+    dma_delay: u8,
+
     pub interrupt_flag: u8,   // 0xFF0F
     pub interrupt_enable: u8, // 0xFFFF
+
     pub last_frame_time: Instant,
     pub accumulated_cycles: u32,
     pub frame_ready: FrameSignal,
@@ -43,15 +52,24 @@ impl Bus {
     pub fn new(rom_data: Vec<u8>, frame_ready: FrameSignal) -> Self {
         Bus {
             cartridge: Cartridge::new(rom_data),
-            ppu: Ppu::new(),
-            apu: Apu::new(),
             wram: [0; 8192],
             hram: [0; 127],
+
+            ppu: Ppu::new(),
+            apu: Apu::new(),
+
             timer: Timer::new(),
             joypad: Joypad::new(),
             serial: Serial::new(),
+
+            dma_active: false,
+            dma_base: 0,
+            dma_byte: 0,
+            dma_delay: 0,
+
             interrupt_flag: 0x00,
             interrupt_enable: 0x00,
+
             last_frame_time: Instant::now(),
             accumulated_cycles: 0,
             frame_ready,
@@ -59,24 +77,39 @@ impl Bus {
     }
 
     pub async fn tick(&mut self) {
+        // DMA
+        if self.dma_active {
+            if self.dma_delay > 0 {
+                self.dma_delay -= 1;
+            } else {
+                let src_addr = ((self.dma_base as u16) << 8) + (self.dma_byte as u16);
+                let byte = self.unblocked_raw_read(src_addr);
+                self.ppu.write_oam(0xFE00 + (self.dma_byte as u16), byte);
+                self.dma_byte = self.dma_byte.wrapping_add(1);
+                if self.dma_byte >= 160 {
+                    self.dma_active = false;
+                }
+            }
+        }
+
         // Step hardware
-        let frame_complete = self.ppu.step(4);
-
-        if self.timer.step(4) {
-            self.interrupt_flag |= 0b0000_0100;
-        }
-        if self.serial.step(4) {
-            self.interrupt_flag |= 0b0000_1000;
-        }
-
-        // Count one frame
-        if frame_complete {
+        let (v_blank, lcd_stat) = self.ppu.step(4);
+        if v_blank {
             self.ppu.update_front_buffer(); // Swap front/back buffer
 
             self.interrupt_flag |= 0b0000_0001;
 
             self.frame_ready.set(true); // Signal frame ready
             Yield(false).await;
+        }
+        if lcd_stat {
+            self.interrupt_flag |= 0b0000_0010;
+        }
+        if self.timer.step(4) {
+            self.interrupt_flag |= 0b0000_0100;
+        }
+        if self.serial.step(4) {
+            self.interrupt_flag |= 0b0000_1000;
         }
     }
 
@@ -111,6 +144,36 @@ impl Bus {
     }
 
     pub fn raw_read(&self, addr: u16) -> u8 {
+        if self.dma_active {
+            if addr < 0xFF80 || addr > 0xFFFE {
+                return 0xFF;
+            }
+        }
+        self.unblocked_raw_read(addr)
+    }
+    fn read_io(&self, addr: u16) -> u8 {
+        match addr {
+            // Joypad Input
+            0xFF00 => self.joypad.read(),
+            // Serial Transfer
+            0xFF01..=0xFF02 => self.serial.read(addr),
+            // Timer and Divider
+            0xFF04..=0xFF07 => self.timer.read(addr),
+            // Interrupt Flag Register
+            0xFF0F => self.interrupt_flag | 0xE0,
+            // Audio
+            0xFF10..=0xFF26 => self.apu.read(addr),
+            // DMA
+            0xFF46 => self.dma_base,
+            // LCD Control, Status, Position, Scrolling, and Palettes
+            0xFF40..=0xFF4B => self.ppu.read_register(addr),
+            // CGB KEY1 Double Speed
+            0xFF4D => 0x00, // TODO: cgb double speed
+            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
+        }
+    }
+
+    fn unblocked_raw_read(&self, addr: u16) -> u8 {
         match addr {
             // ROM bank 00
             0x0000..=0x3FFF => self.cartridge.read(addr),
@@ -136,27 +199,13 @@ impl Bus {
             0xFFFF => self.interrupt_enable,
         }
     }
-    fn read_io(&self, addr: u16) -> u8 {
-        match addr {
-            // Joypad Input
-            0xFF00 => self.joypad.read(),
-            // Serial Transfer
-            0xFF01..=0xFF02 => self.serial.read(addr),
-            // Timer and Divider
-            0xFF04..=0xFF07 => self.timer.read(addr),
-            // Interrupt Flag Register
-            0xFF0F => self.interrupt_flag | 0xE0,
-            // Audio
-            0xFF10..=0xFF26 => self.apu.read(addr),
-            // LCD Control, Status, Position, Scrolling, and Palettes
-            0xFF40..=0xFF4B => self.ppu.read_register(addr),
-            // CGB KEY1 Double Speed
-            0xFF4D => 0x00, // TODO: cgb double speed
-            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
-        }
-    }
 
     pub fn raw_write(&mut self, addr: u16, value: u8) {
+        if self.dma_active {
+            if addr < 0xFF80 || addr > 0xFFFE {
+                return;
+            }
+        }
         match addr {
             // Cartridge ROM
             0x0000..=0x7FFF => self.cartridge.write(addr, value),
@@ -193,6 +242,13 @@ impl Bus {
             0xFF0F => self.interrupt_flag = value,
             // Audio
             0xFF10..=0xFF26 => self.apu.write(addr, value),
+            // DMA
+            0xFF46 => {
+                self.dma_active = true;
+                self.dma_base = value;
+                self.dma_byte = 0;
+                self.dma_delay = 2;
+            }
             // LCD Control, Status, Position, Scrolling, and Palettes
             0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
             // CGB KEY1 Double Speed
