@@ -109,12 +109,6 @@ mod tests {
     use super::*;
     #[test]
     fn test_cpu_instructions() {
-        // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
-
         const TEST_ROMS: [&'static str; 11] = [
             "01-special",
             "02-interrupts",
@@ -142,11 +136,6 @@ mod tests {
 
     #[test]
     fn test_instruction_timing() {
-        // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
 
         let rom = std::fs::read("test_roms/instr_timing.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
@@ -158,11 +147,6 @@ mod tests {
 
     #[test]
     fn test_memory_timing() {
-        // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
 
         let rom = std::fs::read("test_roms/mem_timing.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
@@ -174,11 +158,6 @@ mod tests {
 
     #[test]
     fn test_memory_timing_two() {
-        // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
 
         let rom = std::fs::read("test_roms/mem_timing-2.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
@@ -190,11 +169,6 @@ mod tests {
 
     #[test]
     fn test_interrupt_timing() {
-        // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
 
         let rom = std::fs::read("test_roms/interrupt_time.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
@@ -207,10 +181,6 @@ mod tests {
     #[test]
     fn test_halt_bug() {
         // Initialize env_logger
-        let _logger = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
 
         let rom = std::fs::read("test_roms/halt_bug.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
