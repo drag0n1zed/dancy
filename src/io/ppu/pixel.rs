@@ -2,10 +2,10 @@
 pub(super) struct Pixel {
     pub(super) color: u8,
     pub(super) palette_register: u8, // 0 -> BGP, 1 -> OBP0, 2 -> OBP1
-    bg_priority: bool,    // true -> background will draw over this pixel
+    pub(super) bg_priority: bool,    // true -> background will draw over this pixel
     is_sprite: bool,
 }
-impl Pixel{
+impl Pixel {
     pub(super) fn new(color: u8, palette_register: u8, bg_priority: bool, is_sprite: bool) -> Self {
         Self {
             color,

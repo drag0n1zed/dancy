@@ -1,23 +1,20 @@
 use crate::io::ppu::fetcher::{Fetcher, FetcherState};
 use crate::io::ppu::pixel::{Pixel, PixelQueue};
+use crate::io::ppu::sprite::Sprite;
 
-mod pixel;
 mod fetcher;
+mod pixel;
+mod sprite;
 
-const PALETTE: [u32; 4] = [
-    0xFFFFFFFF, // 0: White
-    0xFFAAAAAA, // 1: Light Gray
-    0xFF555555, // 2: Dark Gray
-    0xFF000000, // 3: Black
-];
-
-#[derive(Default, Clone, Copy)]
-struct Sprite {
-    x: u8,
-    y: u8,
-    tile_index: u8,
-    flags: u8,
+const fn rgb(r: u8, g: u8, b: u8) -> u32 {
+    (0xFF << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32)
 }
+const PALETTE: [u32; 4] = [
+    rgb(255, 255, 255), // 0: White
+    rgb(170, 170, 170), // 1: Light Gray
+    rgb(85,  85,  85),  // 2: Dark Gray
+    rgb(0,   0,   0),   // 3: Black
+];
 
 #[derive(Clone, Copy, PartialEq)]
 enum PpuMode {
@@ -50,13 +47,13 @@ pub struct Ppu {
     bg_queue: PixelQueue,
     fetcher: Fetcher,
     sprite_buffer: [Sprite; 10],
+    sprite_line_buffer: [Option<Pixel>; 160],
     sprite_count: u8,
     discarded_pixels: u8,
     window_line_counter: u8,
 
     lcd_interrupt_signal: bool,
-    back_buffer: [u32; 160 * 144],
-    pub front_buffer: [u32; 160 * 144],
+    pub graphics_buffer: [u32; 160 * 144],
 }
 
 impl Ppu {
@@ -84,13 +81,13 @@ impl Ppu {
             bg_queue: PixelQueue::new(),
             fetcher: Fetcher::new(),
             sprite_buffer: [Sprite::default(); 10],
+            sprite_line_buffer: [None; 160],
             sprite_count: 0,
             discarded_pixels: 0,
             window_line_counter: 0,
 
             lcd_interrupt_signal: false,
-            back_buffer: [0; 160 * 144],
-            front_buffer: [0; 160 * 144],
+            graphics_buffer: [0; 160 * 144],
         }
     }
 
@@ -116,6 +113,33 @@ impl Ppu {
             match self.mode {
                 PpuMode::OAMScan => {
                     if self.dots >= 80 {
+                        // Scan logic
+                        self.sprite_count = 0;
+                        self.sprite_buffer = [Sprite::default(); 10];
+                        let sprite_height = if self.r_lcdc & 0b0000_0100 != 0 { 16 } else { 8 }; // 8x8 or 8x16
+                        for i in 0..40 {
+                            let y_pos = self.oam[i * 4];
+
+                            if (self.r_ly as u16 + 16) >= (y_pos as u16)
+                                && (self.r_ly as u16) < (y_pos as u16 + 16 + sprite_height as u16)
+                            {
+                                let x_pos = self.oam[i * 4 + 1];
+                                let tile_index = self.oam[i * 4 + 2];
+                                let attributes = self.oam[i * 4 + 3];
+
+                                let sprite = Sprite::new(y_pos, x_pos, tile_index, attributes);
+                                self.sprite_buffer[self.sprite_count as usize] = sprite;
+                                self.sprite_count += 1;
+                                if self.sprite_count == 10 {
+                                    break;
+                                }
+                            }
+                        }
+                        // Sort by x, tiebreak with OAM (Already sorted in OAM order, so stable sort by x to get desired result)
+                        self.sprite_buffer[0..self.sprite_count as usize].sort_by(|a, b| a.x.cmp(&b.x));
+                        self.load_line_sprites();
+
+                        // Start render
                         self.fetcher.map_x = self.r_scx / 8;
                         self.fetcher.cycles = 0;
                         self.fetcher.state = FetcherState::GetTile;
@@ -138,14 +162,33 @@ impl Ppu {
                     }
                     self.fetcher
                         .tick(&mut self.bg_queue, &self.vram, self.r_lcdc, self.r_scy, self.r_ly);
-                    if let Some(pixel) = self.bg_queue.pop() {
+
+                    if let Some(mut bg_pixel) = self.bg_queue.pop() {
+                        if self.r_lcdc & 0b0000_0001 == 0 {
+                            bg_pixel.color = 0;
+                        }
+
                         if self.discarded_pixels > 0 {
                             self.discarded_pixels -= 1;
                         } else {
-                            let color = self.resolve_pixel_color(pixel);
+                            let sprite_pixel = self.sprite_line_buffer[self.lx as usize];
+                            let final_pixel = if let Some(sprite) = sprite_pixel {
+                                if sprite.bg_priority && bg_pixel.color != 0 {
+                                    // Sprite behind BG, BG not transparent
+                                    bg_pixel
+                                } else {
+                                    // Sprite on top / BG is transparent
+                                    sprite
+                                }
+                            } else {
+                                // No sprite, BG win
+                                bg_pixel
+                            };
+
+                            let color = self.resolve_pixel_color(final_pixel);
                             let index = (self.r_ly as usize * 160) + self.lx as usize; // 160 pixels per row
-                            if index < self.back_buffer.len() {
-                                self.back_buffer[index] = color;
+                            if index < self.graphics_buffer.len() {
+                                self.graphics_buffer[index] = color;
                             }
                             self.lx += 1;
                         }
@@ -196,9 +239,71 @@ impl Ppu {
         let color_bit = (palette_reg >> (pixel.color * 2)) & 0b11;
         PALETTE[color_bit as usize]
     }
+    fn load_line_sprites(&mut self) {
+        self.sprite_line_buffer = [None; 160];
+        let sprite_height = if self.r_lcdc & 0b0000_0100 != 0 { 16 } else { 8 };
 
-    pub fn update_front_buffer(&mut self) {
-        std::mem::swap(&mut self.back_buffer, &mut self.front_buffer);
+        for i in 0..self.sprite_count as usize {
+            let sprite = self.sprite_buffer[i];
+
+            // which row?
+            let mut row = (self.r_ly as u16 + 16).wrapping_sub(sprite.y as u16) as u8;
+
+            // y-flip
+            if sprite.attributes & 0x40 != 0 {
+                row = sprite_height - 1 - row;
+            }
+
+            let mut tile_index = sprite.tile_index;
+            if sprite_height == 16 {
+                // In 8x16 mode, the top tile is even (index & 0xFE), bottom is odd.
+                tile_index &= 0xFE;
+                if row >= 8 {
+                    tile_index += 1;
+                    row -= 8;
+                }
+            }
+
+            let addr = 0x8000 + (tile_index as u16 * 16) + (row as u16 * 2);
+            let data_lo = self.vram[(addr - 0x8000) as usize];
+            let data_hi = self.vram[(addr - 0x8000 + 1) as usize];
+
+            // Iterate through the 8 pixels
+            for bit in 0..8 {
+                let pixel_x = (sprite.x as i16 - 8) + bit as i16;
+
+                // Skip if pixel is off-screen
+                if pixel_x < 0 || pixel_x >= 160 {
+                    continue;
+                }
+
+                // Handle X-Flip (Attribute Bit 5)
+                // If flipped, we read bits 0..7. If normal, we read 7..0.
+                let shift = if sprite.attributes & 0x20 != 0 {
+                    bit // Read from right (LSB)
+                } else {
+                    7 - bit // Read from left (MSB)
+                };
+
+                // Extract color
+                let color = (((data_hi >> shift) & 1) << 1) | ((data_lo >> shift) & 1);
+
+                // 0 is always transparent
+                if color == 0 {
+                    continue;
+                }
+
+                // priority
+                if self.sprite_line_buffer[pixel_x as usize].is_none() {
+                    self.sprite_line_buffer[pixel_x as usize] = Some(Pixel::new(
+                        color,
+                        1 + ((sprite.attributes >> 4) & 1), // Bit 4: 0=OBP0, 1=OBP1, add 1 to match my definition
+                        (sprite.attributes & 0x80) != 0,    // Bit 7: Priority
+                        true,
+                    ))
+                }
+            }
+        }
     }
     pub fn read_vram(&self, addr: u16) -> u8 {
         self.vram[(addr - 0x8000) as usize]

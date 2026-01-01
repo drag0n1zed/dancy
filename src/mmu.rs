@@ -95,7 +95,6 @@ impl Bus {
         // Step hardware
         let (v_blank, lcd_stat) = self.ppu.step(4);
         if v_blank {
-            self.ppu.update_front_buffer(); // Swap front/back buffer
 
             self.interrupt_flag |= 0b0000_0001;
 
