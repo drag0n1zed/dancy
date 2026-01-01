@@ -152,7 +152,7 @@ impl Fetcher {
     // at 0x9C00 and 0x9800 depending on the LCDC register.
     // To find a tile at (x, y), we calculate the index using y * 32 + x.
     fn get_bg_map_address(&self, map_x: u8, map_y: u8, r_lcdc: u8) -> u16 {
-        let window_or_bg_bit = if self.fetching_window { 0b0100_0000 } else { 0x0000_1000 };
+        let window_or_bg_bit = if self.fetching_window { 0b0100_0000 } else { 0b0000_1000 };
         let base = if r_lcdc & window_or_bg_bit != 0 { 0x9C00 } else { 0x9800 };
         let addr = base + (map_y as u16) * 32 + map_x as u16;
         addr - 0x8000

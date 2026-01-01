@@ -85,8 +85,8 @@ impl DancyHandle {
     }
 
     // Get buffer pixels
-    pub fn get_pixels(&self) -> Vec<u8> {
-        self.state.borrow().bus.ppu.front_buffer.to_vec()
+    pub fn get_pixels(&self) -> [u32; 160 * 144] {
+        self.state.borrow().bus.ppu.front_buffer
     }
 
     // Update joypad state. 0 = pressed, `↓ ↑ ← → S s B A` as u8
