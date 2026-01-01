@@ -11,6 +11,7 @@ pub mod mmu;
 
 // Is frame done? Check without locking Bus
 pub type FrameSignal = Rc<Cell<bool>>;
+pub type SharedFrameBuffer = Rc<RefCell<Vec<u8>>>;
 
 pub struct EmulatorState {
     pub cpu: cpu::Cpu,
@@ -25,14 +26,17 @@ pub struct DancyHandle {
     execution_future: Pin<Box<dyn Future<Output = ()>>>,
     // Shared signal
     frame_ready: FrameSignal,
+    // Video buffer
+    video_buffer: SharedFrameBuffer,
 }
 
 impl DancyHandle {
     pub fn new(rom_bytes: Vec<u8>) -> Self {
         let frame_ready = Rc::new(Cell::new(false));
+        let video_buffer = Rc::new(RefCell::new(vec![0; 160 * 144]));
 
         // Initialize Bus with signal
-        let bus = mmu::Bus::new(rom_bytes, Rc::clone(&frame_ready));
+        let bus = mmu::Bus::new(rom_bytes, Rc::clone(&frame_ready), Rc::clone(&video_buffer));
 
         let state = Rc::new(RefCell::new(EmulatorState {
             cpu: cpu::Cpu::new(),
@@ -61,6 +65,7 @@ impl DancyHandle {
             state,
             execution_future,
             frame_ready,
+            video_buffer,
         }
     }
 
@@ -85,8 +90,9 @@ impl DancyHandle {
     }
 
     // Get buffer
-    pub fn get_graphics(&self) -> [u32; 160 * 144] {
-        self.state.borrow().bus.ppu.graphics_buffer
+    pub fn get_graphics(&self) -> Vec<u8> {
+        let buffer = self.video_buffer.borrow();
+        buffer.to_vec()
     }
 
     // Update joypad state. 0 = pressed, `↓ ↑ ← → S s B A` as u8

@@ -1,4 +1,4 @@
-use crate::FrameSignal;
+use crate::{FrameSignal, SharedFrameBuffer};
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -45,17 +45,18 @@ pub struct Bus {
 
     pub last_frame_time: Instant,
     pub accumulated_cycles: u32,
+
     pub frame_ready: FrameSignal,
 }
 
 impl Bus {
-    pub fn new(rom_data: Vec<u8>, frame_ready: FrameSignal) -> Self {
+    pub fn new(rom_data: Vec<u8>, frame_ready: FrameSignal, video_buffer: SharedFrameBuffer) -> Self {
         Bus {
             cartridge: Cartridge::new(rom_data),
             wram: [0; 8192],
             hram: [0; 127],
 
-            ppu: Ppu::new(),
+            ppu: Ppu::new(video_buffer),
             apu: Apu::new(),
 
             timer: Timer::new(),
@@ -72,6 +73,7 @@ impl Bus {
 
             last_frame_time: Instant::now(),
             accumulated_cycles: 0,
+
             frame_ready,
         }
     }

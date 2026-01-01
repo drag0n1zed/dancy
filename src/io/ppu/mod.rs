@@ -1,20 +1,20 @@
 use crate::io::ppu::fetcher::{Fetcher, FetcherState};
 use crate::io::ppu::pixel::{Pixel, PixelQueue};
 use crate::io::ppu::sprite::Sprite;
+use crate::SharedFrameBuffer;
 
 mod fetcher;
 mod pixel;
 mod sprite;
 
-const fn rgb(r: u8, g: u8, b: u8) -> u32 {
-    (0xFF << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32)
-}
-const PALETTE: [u32; 4] = [
-    rgb(255, 255, 255), // 0: White
-    rgb(170, 170, 170), // 1: Light Gray
-    rgb(85,  85,  85),  // 2: Dark Gray
-    rgb(0,   0,   0),   // 3: Black
+// [R, G, B, A]
+const PALETTE: [[u8; 4]; 4] = [
+    [255, 255, 255, 255], // 0: White
+    [170, 170, 170, 255], // 1: Light Gray
+    [85,  85,  85,  255], // 2: Dark Gray
+    [0,   0,   0,   255], // 3: Black
 ];
+
 
 #[derive(Clone, Copy, PartialEq)]
 enum PpuMode {
@@ -53,11 +53,17 @@ pub struct Ppu {
     window_line_counter: u8,
 
     lcd_interrupt_signal: bool,
-    pub graphics_buffer: [u32; 160 * 144],
+    back_buffer: Vec<u8>,
+    pub front_buffer: SharedFrameBuffer,
 }
 
 impl Ppu {
-    pub fn new() -> Self {
+    pub fn new(graphics_buffer: SharedFrameBuffer) -> Self {
+
+        if graphics_buffer.borrow().len() != 160 * 144 * 4 {
+            graphics_buffer.borrow_mut().resize(160 * 144 * 4, 0);
+        }
+
         Self {
             vram: [0; 8192],
             oam: [0; 160],
@@ -87,7 +93,8 @@ impl Ppu {
             window_line_counter: 0,
 
             lcd_interrupt_signal: false,
-            graphics_buffer: [0; 160 * 144],
+            back_buffer: vec![0; 160 * 144 * 4],
+            front_buffer: graphics_buffer,
         }
     }
 
@@ -186,9 +193,12 @@ impl Ppu {
                             };
 
                             let color = self.resolve_pixel_color(final_pixel);
-                            let index = (self.r_ly as usize * 160) + self.lx as usize; // 160 pixels per row
-                            if index < self.graphics_buffer.len() {
-                                self.graphics_buffer[index] = color;
+                            let index = ((self.r_ly as usize * 160) + self.lx as usize) * 4; // 160 pixels per row
+                            if index + 3< self.back_buffer.len() {
+                                self.back_buffer[index]     = color[0]; // R
+                                self.back_buffer[index + 1] = color[1]; // G
+                                self.back_buffer[index + 2] = color[2]; // B
+                                self.back_buffer[index + 2] = color[3]; // A
                             }
                             self.lx += 1;
                         }
@@ -207,6 +217,14 @@ impl Ppu {
                         if self.r_ly == 144 {
                             vblank_irq = true;
                             self.window_line_counter = 0;
+
+                            let mut front_buffer = self.front_buffer.borrow_mut();
+
+                            if front_buffer.len() != self.back_buffer.len() {
+                                front_buffer.resize(self.back_buffer.len(), 0);
+                            }
+                            std::mem::swap(&mut self.back_buffer, &mut *front_buffer);
+
                             self.mode = PpuMode::VerticalBlank;
                         } else {
                             self.mode = PpuMode::OAMScan;
@@ -228,7 +246,7 @@ impl Ppu {
         (vblank_irq, lcd_stat_irq)
     }
 
-    fn resolve_pixel_color(&self, pixel: Pixel) -> u32 {
+    fn resolve_pixel_color(&self, pixel: Pixel) -> [u8; 4] {
         let palette_reg = match pixel.palette_register {
             0 => self.r_bgp,
             1 => self.r_obp0,
