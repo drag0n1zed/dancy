@@ -47,7 +47,10 @@ impl DancyProxy {
     pub fn tick(&self) -> Vec<u8> {
         // Send command
         self.tx.send(EmuCommand::Tick).unwrap();
-        self.frame_rx.lock().deref().recv().unwrap_or(vec![])
+        self.frame_rx.lock().deref().recv().unwrap_or_else(|e| {
+            println!("Cannot receive frame from emulator core. Error: {}", e);
+            vec!()
+        })
     }
 
     pub fn set_buttons(&self, pressed: u8) {
