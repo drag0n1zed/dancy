@@ -42,7 +42,6 @@ jobs:
           name: linux-build
           path: build/linux/x64/release/bundle/
 
-  # --- Windows Build (Runs on Windows) ---
   build-windows:
     runs-on: windows-latest
     steps:
@@ -68,7 +67,6 @@ jobs:
           name: windows-executable
           path: build/windows/x64/runner/Release/
 
-  # --- macOS & iOS Build (Runs on macOS) ---
   build-macos-ios:
     runs-on: macos-latest
     steps:
