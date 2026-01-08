@@ -33,7 +33,7 @@ class _GamePageState extends State<GamePage>
 
   Future<void> _startEmulator() async {
     // Load file from assets
-    final byteData = await rootBundle.load('assets/cpu_instrs.gb');
+    final byteData = await rootBundle.load('assets/dmg-acid2.gb');
     final romBytes = byteData.buffer.asUint8List();
 
     _proxy = await DancyProxy.newInstance(romBytes: romBytes);
@@ -76,7 +76,9 @@ class _GamePageState extends State<GamePage>
             child: Center(
               child: AspectRatio(
                 aspectRatio: 160 / 144,
-                child: CustomPaint(painter: ScreenPainter(_frameImage)),
+                child: RepaintBoundary(
+                  child: CustomPaint(painter: ScreenPainter(_frameImage)),
+                ),
               ),
             ),
           ),

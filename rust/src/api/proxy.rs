@@ -46,9 +46,11 @@ impl DancyProxy {
 
     pub fn tick(&self) -> Vec<u8> {
         // Send command
-        self.tx.send(EmuCommand::Tick).unwrap();
+        self.tx.send(EmuCommand::Tick).unwrap_or_else(| e |
+            eprintln!("Cannot run frame. Error: {}", e)
+        );
         self.frame_rx.lock().deref().recv().unwrap_or_else(|e| {
-            println!("Cannot receive frame from emulator core. Error: {}", e);
+            eprintln!("Cannot receive frame from emulator core. Error: {}", e);
             vec!()
         })
     }

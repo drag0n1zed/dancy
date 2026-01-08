@@ -97,7 +97,6 @@ impl Bus {
         // Step hardware
         let (v_blank, lcd_stat) = self.ppu.step(4);
         if v_blank {
-
             self.interrupt_flag |= 0b0000_0001;
 
             self.frame_ready.set(true); // Signal frame ready
@@ -151,27 +150,6 @@ impl Bus {
             }
         }
         self.unblocked_raw_read(addr)
-    }
-    fn read_io(&self, addr: u16) -> u8 {
-        match addr {
-            // Joypad Input
-            0xFF00 => self.joypad.read(),
-            // Serial Transfer
-            0xFF01..=0xFF02 => self.serial.read(addr),
-            // Timer and Divider
-            0xFF04..=0xFF07 => self.timer.read(addr),
-            // Interrupt Flag Register
-            0xFF0F => self.interrupt_flag | 0xE0,
-            // Audio
-            0xFF10..=0xFF26 => self.apu.read(addr),
-            // DMA
-            0xFF46 => self.dma_base,
-            // LCD Control, Status, Position, Scrolling, and Palettes
-            0xFF40..=0xFF4B => self.ppu.read_register(addr),
-            // CGB KEY1 Double Speed
-            0xFF4D => 0x00, // TODO: cgb double speed
-            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
-        }
     }
 
     fn unblocked_raw_read(&self, addr: u16) -> u8 {
@@ -231,6 +209,33 @@ impl Bus {
         }
     }
 
+    fn read_io(&self, addr: u16) -> u8 {
+        match addr {
+            // Joypad Input
+            0xFF00 => self.joypad.read(),
+            // Serial Transfer
+            0xFF01..=0xFF02 => self.serial.read(addr),
+            // Timer and Divider
+            0xFF04..=0xFF07 => self.timer.read(addr),
+            // Interrupt Flag Register
+            0xFF0F => self.interrupt_flag | 0xE0,
+            // Audio
+            0xFF10..=0xFF26 => self.apu.read(addr),
+            // DMA
+            0xFF46 => self.dma_base,
+            // LCD Control, Status, Position, Scrolling, and Palettes
+            0xFF40..=0xFF4B => self.ppu.read_register(addr),
+            // CGB
+            0xFF4C | 0xFF4D | 0xFF4F | 0xFF51..=0xFF55 | 0xFF56 | 0xFF68..=0xFF6B | 0xFF6C | 0xFF70 => {
+                self.read_cgb_io(addr)
+            }
+            _ => {
+                println!("Unimplemented read to IO address {:04X}", addr);
+                0xFF
+            }
+        }
+    }
+
     fn write_io(&mut self, addr: u16, value: u8) {
         match addr {
             // Joypad Input
@@ -253,8 +258,18 @@ impl Bus {
             // LCD Control, Status, Position, Scrolling, and Palettes
             0xFF40..=0xFF4B => self.ppu.write_register(addr, value),
             // CGB KEY1 Double Speed
-            0xFF4D => {} // TODO: cgb double speed
-            _ => unimplemented!("Unimplemented IO address {:04X}", addr),
+            0xFF4C | 0xFF4D | 0xFF4F | 0xFF51..=0xFF55 | 0xFF56 | 0xFF68..=0xFF6B | 0xFF6C | 0xFF70 => {
+                self.write_cgb_io(addr, value)
+            }
+            _ => println!("Unimplemented write to IO address {:04X}", addr),
         }
+    }
+
+    fn read_cgb_io(&self, _addr: u16) -> u8 {
+        0x00 // TODO: CGB
+    }
+
+    fn write_cgb_io(&self, _addr: u16, _value: u8) {
+        // TODO: CGB
     }
 }

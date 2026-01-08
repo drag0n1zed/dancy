@@ -49,14 +49,14 @@ pub struct Registers {
 impl Registers {
     pub fn new() -> Self {
         Self {
-            a: 0x01,
-            f: 0xB0.into(),
+            a: 0x11,
+            f: 0x80.into(),
             b: 0x00,
-            c: 0x13,
-            d: 0x00,
-            e: 0xD8,
-            h: 0x01,
-            l: 0x4D,
+            c: 0x00,
+            d: 0xFF,
+            e: 0x56,
+            h: 0x00,
+            l: 0x0D,
         }
     }
 

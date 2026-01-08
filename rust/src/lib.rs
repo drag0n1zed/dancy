@@ -176,21 +176,22 @@ mod tests {
     }
 
     #[test]
-    fn test_interrupt_timing() {
+    fn test_halt_bug() {
+        // Initialize env_logger
 
-        let rom = std::fs::read("test_roms/interrupt_time.gb").unwrap();
+        let rom = std::fs::read("test_roms/halt_bug.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
 
-        for _ in 0..1500 {
+        for _ in 0..10000 {
             handle.run_frame();
         }
     }
 
     #[test]
-    fn test_halt_bug() {
+    fn test_tetris() {
         // Initialize env_logger
 
-        let rom = std::fs::read("test_roms/halt_bug.gb").unwrap();
+        let rom = std::fs::read("test_roms/tetris.gb").unwrap();
         let mut handle = DancyHandle::new(rom);
 
         for _ in 0..10000 {
