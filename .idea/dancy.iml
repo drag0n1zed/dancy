@@ -17,6 +17,11 @@
       <excludeFolder url="file://$MODULE_DIR$/macos/Flutter/ephemeral" />
       <excludeFolder url="file://$MODULE_DIR$/rust_builder/cargokit/build_tool/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/windows/flutter/ephemeral" />
+      <excludeFolder url="file://$MODULE_DIR$/rust_builder/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/rust_builder/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/rust_builder/build" />
+      <excludeFolder url="file://$MODULE_DIR$/rust_builder/cargokit/build_tool/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/rust_builder/cargokit/build_tool/build" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

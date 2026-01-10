@@ -43,9 +43,6 @@ pub struct Bus {
     pub interrupt_flag: u8,   // 0xFF0F
     pub interrupt_enable: u8, // 0xFFFF
 
-    pub last_frame_time: Instant,
-    pub accumulated_cycles: u32,
-
     pub frame_ready: FrameSignal,
 }
 
@@ -70,9 +67,6 @@ impl Bus {
 
             interrupt_flag: 0x00,
             interrupt_enable: 0x00,
-
-            last_frame_time: Instant::now(),
-            accumulated_cycles: 0,
 
             frame_ready,
         }
